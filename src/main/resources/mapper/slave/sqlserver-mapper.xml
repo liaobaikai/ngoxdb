@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liaobaikai.ngoxdb.dao.slave.SlaveSQLServerMapper">
+
+    <!-- 删除表 -->
+    <update id="dropTable">
+        drop table ${table.tableName}
+    </update>
+
+    <!-- 创建表 -->
+    <update id="createTable" parameterType="com.liaobaikai.ngoxdb.info.TableInfo">
+        create table ${table.tableName}
+        (
+        <!-- 列 -->
+        <foreach collection="table.tableColumnInfoList" item="columnInfo" separator="," >
+            ${columnInfo.columnName} ${columnInfo.columnType}
+            <if test="columnInfo.isNotNull">NOT NULL</if>
+            <if test="columnInfo.defaultValue != null">DEFAULT ${columnInfo.defaultValue}</if>
+            <if test="columnInfo.checkClause != null and columnInfo.checkClause != ''">CHECK (${columnInfo.checkClause})</if>
+        </foreach>
+        <!-- 主键 -->
+        <foreach collection="table.tableIndexInfoMap" index="key" item="indexInfoList" separator="," open=",">
+            <if test="indexInfoList != null and indexInfoList.size > 0">
+                <if test="indexInfoList[0].isClusteredIndex">
+                    PRIMARY KEY
+                    <foreach collection="indexInfoList" item="indexInfo" separator="," open="(" close=")">
+                        ${indexInfo.columnName}
+                    </foreach>
+                </if>
+            </if>
+        </foreach>
+        )
+    </update>
+
+    <!-- 查询是否存在 -->
+    <select id="countTable" resultType="int">
+        select count(0) from sysobjects o where o.name = #{tableName} and o.xtype = 'U'
+    </select>
+
+</mapper>

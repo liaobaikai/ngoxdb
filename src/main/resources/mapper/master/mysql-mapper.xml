@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liaobaikai.ngoxdb.dao.master.MasterMySQLMapper">
+
+    <!-- 表信息 -->
+    <select id="getTableInfo" resultType="com.liaobaikai.ngoxdb.info.TableInfo">
+        select
+            t.TABLE_SCHEMA,
+            t.TABLE_NAME,
+            t.AUTO_INCREMENT currentIncrementValue,
+            t.TABLE_COMMENT
+        from information_schema.TABLES t
+        where t.TABLE_SCHEMA = #{schemaName}
+          and t.TABLE_NAME = #{tableName}
+          and t.TABLE_TYPE = 'BASE TABLE'
+          and t.TEMPORARY = 'N'
+            limit 1
+    </select>
+
+    <!-- 列信息 -->
+    <select id="getTableColumnInfo" resultType="com.liaobaikai.ngoxdb.info.TableColumnInfo">
+        select
+            c.TABLE_SCHEMA,
+            c.TABLE_NAME,
+            c.COLUMN_NAME,
+            c.COLUMN_DEFAULT defaultValue,
+            case c.IS_NULLABLE when 'YES' then 0 else 1 end isNotNull,
+            c.DATA_TYPE,
+            c.CHARACTER_MAXIMUM_LENGTH charMaxLength,
+            c.CHARACTER_OCTET_LENGTH charBytesMaxLength,
+            c.NUMERIC_PRECISION numberPrecision,
+            c.NUMERIC_SCALE numberScale,
+            c.DATETIME_PRECISION,
+            c.CHARACTER_SET_NAME charsetName,
+            c.COLLATION_NAME,
+            c.COLUMN_TYPE,
+            case c.COLUMN_KEY when 'PRI' then 1 else 0 end isPrimaryKey,
+            case c.COLUMN_KEY when 'UNI' then 1 else 0 end isUniqueKey,
+            c.EXTRA,
+            c.PRIVILEGES,
+            c.COLUMN_COMMENT
+        from information_schema.COLUMNS c
+            left join information_schema.CHECK_CONSTRAINTS cc
+                on c.TABLE_SCHEMA = cc.CONSTRAINT_SCHEMA
+                and c.TABLE_NAME  = cc.TABLE_NAME
+                and c.COLUMN_NAME = cc.CONSTRAINT_NAME
+        where 1 = 1
+            and c.TABLE_SCHEMA = #{schemaName}
+            and c.TABLE_NAME   = #{tableName}
+        order by c.ORDINAL_POSITION asc
+    </select>
+
+    <!-- 表的索引信息 -->
+    <select id="getTableIndexInfo" resultType="com.liaobaikai.ngoxdb.info.TableIndexInfo">
+        select
+            isi.INDEX_ID,
+            isi.NAME indexName,
+            case isi.TYPE when 0 then 1 else 0 end isNonUniqueSecondaryIndex,
+            case isi.TYPE when 1 then 1 else 0 end isAutoGenClusteredIndex,
+            case isi.TYPE when 2 then 1 else 0 end isUniqueNonClusteredIndex,
+            case isi.TYPE when 3 then 1 else 0 end isClusteredIndex,
+            case isi.TYPE when 32 then 1 else 0 end isFullTextIndex,
+            case isi.TYPE when 64 then 1 else 0 end isSpatialIndex,
+            case isi.TYPE when 128 then 1 else 0 end isVirtualColumnSecondaryIndex,
+            isi.N_FIELDS columnCount,
+            isf.NAME columnName,
+            isf.POS columnPosition
+        from information_schema.INNODB_SYS_INDEXES isi
+                 left join information_schema.INNODB_SYS_TABLES ist
+                           on isi.TABLE_ID = ist.TABLE_ID
+                 left join information_schema.INNODB_SYS_FIELDS isf
+                           on isf.INDEX_ID = isi.INDEX_ID
+        where ist.NAME = concat(#{schemaName}, '/', #{tableName})
+    </select>
+
+    <!-- 获取表的外键 -->
+    <!-- type: https://dev.mysql.com/doc/refman/5.6/en/information-schema-innodb-sys-foreign-table.html -->
+    <!-- RESTRICT = NO ACTION = NULL -->
+    <select id="getTableForeignKeyInfo" resultType="com.liaobaikai.ngoxdb.info.TableForeignKeyInfo">
+        select
+            substring(isf.ID, POSITION('/' in isf.REF_NAME) + 1) name,
+            left(isf.FOR_NAME, POSITION('/' in isf.FOR_NAME) - 1) schemaName,
+            left(isf.REF_NAME, POSITION('/' in isf.REF_NAME) - 1) referenceSchemaName,
+            substring(isf.FOR_NAME, POSITION('/' in isf.FOR_NAME) + 1) tableName,
+            substring(isf.REF_NAME, POSITION('/' in isf.REF_NAME) + 1) referenceTableName,
+            isf.N_COLS columnCount,
+            case
+                when isf.TYPE in(0, 4, 8, 32) then 4
+                when isf.TYPE in(1, 5, 9, 33) then 1
+                when isf.TYPE in(2, 6, 10, 34) then 2
+                when isf.TYPE in(16, 20, 24, 48) then 0 end deleteReferentialAction,
+            case
+                when isf.TYPE in(0, 1, 2, 16) then 4
+                when isf.TYPE in(4, 5, 6, 20) then 1
+                when isf.TYPE in(8, 9, 10, 24) then 2
+                when isf.TYPE in(32, 33, 34, 48) then 0 end updateReferentialAction,
+            case
+                when isf.TYPE in(0, 4, 8, 32) then 'RESTRICT'
+                when isf.TYPE in(1, 5, 9, 33) then 'CASCADE'
+                when isf.TYPE in(2, 6, 10, 34) then 'SET_NULL'
+                when isf.TYPE in(16, 20, 24, 48) then 'NO_ACTION' end deleteReferentialActionDesc,
+            case
+                when isf.TYPE in(0, 1, 2, 16) then 'RESTRICT'
+                when isf.TYPE in(4, 5, 6, 20) then 'CASCADE'
+                when isf.TYPE in(8, 9, 10, 24) then 'SET_NULL'
+                when isf.TYPE in(32, 33, 34, 48) then 'NO_ACTION' end updateReferentialActionDesc,
+            isfc.FOR_COL_NAME columnName,
+            isfc.REF_COL_NAME referenceColumnName
+        from information_schema.INNODB_SYS_FOREIGN isf
+        left join information_schema.INNODB_SYS_FOREIGN_COLS isfc
+            on isf.id = isfc.id
+        where isf.FOR_NAME = concat(#{schemaName}, '/', #{tableName})
+    </select>
+
+    <!-- 查询表的记录数 -->
+    <select id="selectCount" resultType="long">
+        select count(0) from ${schemaName}.${tableName}
+    </select>
+
+    <!-- 查询表的数据 -->
+    <select id="selectList" resultType="java.util.LinkedHashMap">
+        select * from ${schemaName}.${tableName}
+    </select>
+
+</mapper>

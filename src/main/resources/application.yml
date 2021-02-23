@@ -1,0 +1,115 @@
+spring:
+  datasource:
+    # 规则：
+    # 1.可以一主多从，主：master，从 slave [{}, {}, {} ]
+    # 2.可以一主一从，主：master，从 slave
+    master:
+      database: sqlserver
+      host: baikai.top
+      port: 14330
+      database-name: bds281940313_db
+      username: sa
+      password: x+y-1=0?x&y
+      params:
+      table-replace: true
+#    master:
+#      database: oracle
+##      host: 192.168.3.101
+##      servers: tcp://192.168.3.101:1521,192.168.3.104:1521
+#      servers: baikai.top:11521
+##      port: 1521
+#      database-name: orcl
+#      username: baikai
+#      password: baikai#1234
+##      params:
+#      table-replace: true
+#      protocol: tcp
+#      lower-case-name: true
+    slave:
+      - {
+          database: mysql,
+          host: 127.0.0.1,
+          port: 3306,
+          database-name: bds281940313_db,
+          username: root,
+          password: 123456,
+          replace-table: true,
+          truncate-table: true,
+          create-table-params: ,
+          params: ,
+          primary-key-with-autoincrement-columns: true,
+          lower-case-name: false,
+          generate-name: true,
+          db-console-log: true
+        }
+#      - {
+#        database: oracle,
+#        servers: baikai.top:11521,
+#        database-name: orcl,
+#        username: baikai,
+#        password: baikai#1234,
+#        replace-table: true,
+#        truncate-table: false,
+#        create-table-params: ,
+#        params: ,
+#        primary-key-with-autoincrement-columns: true,
+#        lower-case-name: false,
+#        generate-name: true,
+#        db-console-log: true
+#      }
+      - {
+          database: msaccess,
+          local-file: /Users/fei00/Desktop/outputDB2.mdb,
+          # V2000, V2003, V2007, V2010
+          new-database-version: V2003,
+          replace-table: true,
+          db-console-log: true,
+          truncate-table: true
+      }
+#      - {
+#          database: sqlserver,
+#          host: baikai.top,
+#          port: 14330,
+#          database-name: bds281940313_db,
+#          username: sa,
+#          password: 'x+y-1=0?x&y',
+#          replace-table: true,
+#          truncate-table: false,
+#          create-table-params: ,
+#          primary-key-with-autoincrement-columns: true,
+#          lower-case-name: true
+#        }
+
+#    slave:
+#      database: mysql
+#      host: 127.0.0.1
+#      port: 3306
+#      database-name: bds281940313_db
+#      username: root
+#      password: 123456
+#      replace-table: true
+#      truncate-table: false
+#      params:
+#      primary-key-with-autoincrement-columns: true
+#      lower-case-name: true
+#  main:
+#    allow-bean-definition-overriding: true
+
+#    master:
+#      database: mysql
+#      host: 127.0.0.1
+#      port: 3306
+#      database-name: sakila
+#      username: root
+#      password: 123456
+#      replace-table: true
+#      truncate-table: false
+#      params:
+#    master:
+#      database: msaccess
+#      local-file: /Users/fei00/Desktop/g-cgb6a3z3k~jytv8v48(1)(1).mdb
+#      /Users/fei00/Downloads/g-cgb6a3z3k~jytv8v48(1)(2).mdb
+
+logging:
+  level:
+    com.liaobaikai.ngoxdb.jdbctemplate.SimpleJdbcTemplate: info

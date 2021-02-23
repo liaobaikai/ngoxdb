@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.liaobaikai.ngoxdb.dao.master.MasterSQLServerMapper">
+
+    <!-- 表信息 -->
+    <select id="getTableInfo" resultType="com.liaobaikai.ngoxdb.info.TableInfo">
+        select
+            s.name tableSchema,
+            t.name tableName,
+            ep.value tableComment,
+            SERVERPROPERTY('Collation') defaultCollation,
+            SERVERPROPERTY('SqlCharSetName') defaultCharset
+        from sys.tables t
+        left join sys.schemas s
+            on t.schema_id = s.schema_id
+        left join sys.extended_properties ep
+            on t.object_id = ep.major_id and ep.minor_id = 0
+        where s.name = #{schemaName} and t.name = #{tableName}
+    </select>
+
+    <!-- 列信息 -->
+    <select id="getTableColumnInfo" resultType="com.liaobaikai.ngoxdb.info.TableColumnInfo">
+        select
+            s.name tableSchema,
+            t.name tableName,
+            c.name columnName,
+            ep.value COLUMN_COMMENT,
+            sc.text defaultValue,
+            case c.isnullable when 1 then 0 else 1 end isNotNull,
+            case when exists (
+                SELECT 1 FROM sysobjects where xtype='PK' and parent_obj=c.id and name in (
+                    SELECT name FROM sysindexes WHERE indid in(
+                        SELECT indid FROM sysindexkeys WHERE id = c.id AND colid=c.colid
+                    )
+                )
+            ) then 1 else 0 end isPrimaryKey,
+            case when exists (
+                SELECT 1 FROM sysobjects where xtype='UQ' and parent_obj=c.id and name in (
+                    SELECT name FROM sysindexes WHERE indid in (
+                        SELECT indid FROM sysindexkeys WHERE id = c.id AND colid=c.colid
+                    )
+                )
+            ) then 1 else 0 end isUniqueKey,
+            c.prec precision,
+            c.scale scale,
+            c.collation COLLATION_NAME,
+            st.name DATA_TYPE
+        from syscolumns c
+        left join sys.tables t
+            on t.object_id = c.id
+        left join systypes st
+            on c.xusertype = st.xusertype
+        left join sys.schemas s
+            on t.schema_id = s.schema_id
+        left join syscomments sc
+            on c.cdefault = sc.id
+        left join sys.extended_properties ep
+            on t.object_id = ep.major_id and c.colid = ep.minor_id
+        where s.name = #{schemaName} and t.name = #{tableName} order by colorder asc
+    </select>
+
+    <!-- 表的索引信息 -->
+    <select id="getTableIndexInfo" resultType="com.liaobaikai.ngoxdb.info.TableIndexInfo">
+        select
+            s.name schemaName,
+            o.name tableName,
+            i.index_id,
+            c.name columnName,
+            i.name indexName,
+            case when i.is_unique = 0 and i.is_primary_key = 0 then 1 else 0 end isNonUniqueSecondaryIndex,
+            case when i.is_unique = 1 and i.is_primary_key = 0 then 1 else 0 end isUniqueNonClusteredIndex,
+            i.is_primary_key isClusteredIndex,
+            ik.keyno columnPosition,
+            -1 columnCount
+        from sysindexkeys ik
+        left join syscolumns c
+            on ik.id = c.id and ik.colid = c.colid
+        left join sys.indexes i
+            on i.object_id = ik.id and i.index_id = ik.indid
+        left join sys.objects o
+            on o.object_id = i.object_id
+        left join sys.schemas s
+            on o.schema_id = s.schema_id
+        where s.name = #{schemaName} and o.name = #{tableName} order by index_id asc;
+    </select>
+
+    <!-- 获取表的外键 -->
+    <!-- type: https://docs.microsoft.com/zh-cn/sql/t-sql/functions/objectproperty-transact-sql?view=sql-server-ver15 -->
+    <!-- CnstIsDeleteCascade, CnstIsUpdateCascade -->
+    <select id="getTableForeignKeyInfo" resultType="com.liaobaikai.ngoxdb.info.TableForeignKeyInfo">
+        select
+            fk.name,
+            s1.name schemaName,
+            o1.name tableName,
+            s2.name referenceSchemaName,
+            o2.name referenceTableName,
+            fkc.constraint_column_id columnCount,
+            fk.delete_referential_action,
+            fk.delete_referential_action_desc,
+            fk.update_referential_action,
+            fk.update_referential_action_desc,
+            c1.name columnName,
+            c2.name referenceColumnName,
+            fk.is_system_named isAutoGen
+        from sys.foreign_keys fk
+        left join sys.objects o1
+            on fk.parent_object_id = o1.object_id
+        left join sys.objects o2
+            on fk.referenced_object_id = o2.object_id
+        left join sys.schemas s1
+            on s1.schema_id = o1.schema_id
+        left join sys.schemas s2
+            on s2.schema_id = o2.schema_id
+        left join sys.foreign_key_columns fkc
+            on fk.object_id = fkc.constraint_object_id
+        left join sys.columns c1
+            on c1.object_id = fk.parent_object_id and c1.column_id = fkc.parent_column_id
+        left join sys.columns c2
+            on c2.object_id = fk.referenced_object_id and c2.column_id = fkc.referenced_column_id
+        where s1.name = #{schemaName} and o1.name = #{tableName}
+    </select>
+
+    <!-- 查询表的记录数 -->
+    <select id="selectCount" resultType="long">
+        select count(0) from ${schemaName}.${tableName}
+    </select>
+
+    <!-- 查询表的数据 -->
+    <select id="selectList" resultType="java.util.LinkedHashMap">
+        select * from ${schemaName}.${tableName}
+    </select>
+
+</mapper>
