@@ -5,7 +5,6 @@ import com.liaobaikai.ngoxdb.config.ConfigManager;
 import com.liaobaikai.ngoxdb.config.DatabaseConfig;
 import com.liaobaikai.ngoxdb.dao.BasicDatabaseDao;
 import com.liaobaikai.ngoxdb.entity.SlaveMetaDataEntity;
-import com.liaobaikai.ngoxdb.enums.DatabaseVendorEnum;
 import com.liaobaikai.ngoxdb.enums.fn.DatabaseFunctionEnum;
 import com.liaobaikai.ngoxdb.info.ColumnInfo;
 import com.liaobaikai.ngoxdb.info.ConstraintInfo;
@@ -16,7 +15,6 @@ import com.liaobaikai.ngoxdb.rs.ImportedKey;
 import com.liaobaikai.ngoxdb.rs.PrimaryKey;
 import com.liaobaikai.ngoxdb.utils.CommonUtils;
 import com.liaobaikai.ngoxdb.utils.StringUtils;
-import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
 
@@ -24,7 +22,6 @@ import java.util.*;
  * @author baikai.liao
  * @Time 2021-01-28 22:17:26
  */
-@Slf4j
 public abstract class BasicDatabaseConverter implements DatabaseConverter {
 
     // 函数映射
@@ -34,6 +31,10 @@ public abstract class BasicDatabaseConverter implements DatabaseConverter {
     private final boolean isMaster;
     private final JdbcTemplate2 jdbcTemplate;
     private final DatabaseConfig databaseConfig;
+    /**
+     * 已转换的表
+     */
+    protected final List<String> convertedFailTables = new ArrayList<>();
 
     public BasicDatabaseConverter() {
         // 默认实现
@@ -48,6 +49,22 @@ public abstract class BasicDatabaseConverter implements DatabaseConverter {
         this.isMaster = isMaster;
         this.masterDatabaseVendor = masterDatabaseVendor;
         this.databaseConfig = databaseConfig;
+    }
+
+    protected void skip(String msg, Object...args){
+        CommonUtils.skip(this.getDatabaseConfig(), msg, args);
+    }
+
+    protected void warn(String msg, Object...args){
+        CommonUtils.warn(this.getDatabaseConfig(), msg, args);
+    }
+
+    protected void log(String msg, Object...args){
+        CommonUtils.log(this.getDatabaseConfig(), msg, args);
+    }
+
+    protected void log2(String msg, Object...args){
+        CommonUtils.log2(this.getDatabaseConfig(), msg, args);
     }
 
     @Override
@@ -66,8 +83,8 @@ public abstract class BasicDatabaseConverter implements DatabaseConverter {
     }
 
     @Override
-    public String getDatabaseDataTypeDefault(String masterDateTypeDef) {
-        return ConfigManager.getDatabaseDataTypeDefault(masterDateTypeDef, this.masterDatabaseVendor, this.getDatabaseVendor());
+    public String getDatabaseDataTypeDefault(String masterDataTypeDef, int dataType) {
+        return ConfigManager.getDatabaseDataTypeDefault(masterDataTypeDef, this.masterDatabaseVendor, this.getDatabaseVendor());
     }
 
     @Override
@@ -124,19 +141,22 @@ public abstract class BasicDatabaseConverter implements DatabaseConverter {
      */
     public boolean beforeCreateTable(TableInfo ti) {
         DatabaseConfig databaseConfig = this.getDatabaseDao().getJdbcTemplate().getDatabaseConfig();
-        if(databaseConfig.isReplaceTable()){
-            // 替换表
-            // 查询表是否存在
-            if(this.getDatabaseDao().getTableCount(this.isSameDatabaseVendor() ? ti.getTableSchem() : null, ti.getTableName()) > 0){
-                int index;
-                if((index = this.databaseConfig.getUrl().indexOf("?")) != -1){
-                    log.info("表{}已存在, 即将删除重建...{}", ti.getTableName(), this.databaseConfig.getUrl().substring(0, index));
-                } else {
-                    log.info("表{}已存在, 即将删除重建...{}", ti.getTableName(), this.databaseConfig.getUrl());
-                }
-                this.getDatabaseDao().dropTable(ti.getTableName());
+
+        // 查询表是否存在
+        String tName = this.getRightName(ti.getTableName());
+        if(this.getDatabaseDao().getTableCount(this.isSameDatabaseVendor() ? ti.getTableSchem() : null, ti.getTableName()) > 0){
+
+            if(databaseConfig.isReplaceTable()) {
+                log2("Table {} already exists! Replace.", tName);
+                log("DROP TABLE " + tName);
+                this.getDatabaseDao().dropTable(tName);
+                log2("Table {} removed.", tName);
+            } else {
+                skip("Table {} already exists.", tName);
+                return false;
             }
         }
+
         return true;
     }
 
@@ -171,7 +191,7 @@ public abstract class BasicDatabaseConverter implements DatabaseConverter {
             // 默认值
             if (columnInfo.getColumnDef() != null) {
                 // 时间默认值
-                String dataTypeDef = this.getDatabaseDataTypeDefault(columnInfo.getColumnDef());
+                String dataTypeDef = this.getDatabaseDataTypeDefault(columnInfo.getColumnDef(), columnInfo.getDataType());
                 sqlBuilder.append("DEFAULT ").append(dataTypeDef == null ? columnInfo.getColumnDef() : dataTypeDef).append(" ");
             }
 
@@ -350,8 +370,15 @@ public abstract class BasicDatabaseConverter implements DatabaseConverter {
     @Override
     public void createAllTable(List<TableInfo> tis) {
         for(TableInfo ti: tis){
-            this.createTable(ti);
-            this.migrateData(ti);
+            try{
+                this.createTable(ti);
+                this.migrateData(ti);
+            } catch (Exception e){
+                // java.sql.BatchUpdateException: General error
+                e.printStackTrace();
+                convertedFailTables.add(ti.getTableName());
+                log2("\033[31m" + e.getMessage() + "\033[m");
+            }
         }
     }
 
@@ -362,11 +389,11 @@ public abstract class BasicDatabaseConverter implements DatabaseConverter {
             return;
         }
         StringBuilder sqlBuilder = this.buildCreateTable(ti);
-        // try {
-            this.getDatabaseDao().getJdbcTemplate().execute(sqlBuilder.toString());
-        // } catch (Exception e){
-        //     log.error(this.databaseConfig.getDatabase() + ", table:" + ti.getTableName() + ": " + e.getMessage());
-        // }
+        log(sqlBuilder.toString());
+
+        this.getDatabaseDao().getJdbcTemplate().execute(sqlBuilder.toString());
+
+        log2("Table {} created.", this.getRightName(ti.getTableName()));
 
         this.afterCreateTable(ti);
     }
@@ -485,6 +512,11 @@ public abstract class BasicDatabaseConverter implements DatabaseConverter {
     }
 
     @Override
+    public void pullData(TableInfo ti, List<DatabaseConverter> slaveDatabaseConverters) {
+
+    }
+
+    @Override
     public void migrateData(TableInfo ti) {
 
         // 迁移表的数据
@@ -502,74 +534,121 @@ public abstract class BasicDatabaseConverter implements DatabaseConverter {
 
         // 截断表
         if(this.getDatabaseConfig().isTruncateTable()){
-            if(this.getDatabaseVendor().equals(DatabaseVendorEnum.MICROSOFT_ACCESS.getVendor())){
-                log.info("Microsoft Access database: 表{}必须为空!", ti.getTableName());
-                return;
-            } else {
-                this.getDatabaseDao().truncateTable(this.getRightName(ti.getTableName()));
-            }
+            this.getDatabaseDao().truncateTable(this.getRightName(ti.getTableName()));
         }
 
         // 生成sql语句：
         // insert into T (col1, col2, col3, ...) values (?, ?, ?, ...)
         final StringBuilder sqlBuilder = new StringBuilder("INSERT INTO ").append(this.getRightName(ti.getTableName())).append("(");
         final StringBuilder sqlPlaceHolderBuilder = new StringBuilder();
-        ti.getColumns().forEach(c -> {
+
+        int i = 0;
+        int[] argTypes = new int[ti.getColumns().size()];
+        for(ColumnInfo c : ti.getColumns()){
             sqlBuilder.append(this.getRightName(c.getColumnName())).append(",");
             sqlPlaceHolderBuilder.append("?,");
-        });
+            argTypes[i++] = this.changeDataType(c.getDataType());
+        }
+
         sqlBuilder.delete(sqlBuilder.length() - 1, sqlBuilder.length()).append(") VALUES (");
         sqlPlaceHolderBuilder.delete(sqlPlaceHolderBuilder.length() - 1, sqlPlaceHolderBuilder.length());
         sqlBuilder.append(sqlPlaceHolderBuilder).append(")");
 
         // 插入缓冲区
-        List<Object[]> insertBuffer = new ArrayList<>();
         String sql;
 
         // 不分页
         if(tableRowCount <= pageSize){
             sql = String.format("SELECT * FROM %s", masterDatabaseConverter.getRightName(ti.getTableName()));
-            this.batchUpdate(masterDatabaseDao, sqlBuilder, insertBuffer, sql);
+            this.batchUpdate(masterDatabaseDao, sqlBuilder, sql, argTypes);
             return;
         }
 
         // 分页插入
         // 计算表的页数
         long tablePageSize = (tableRowCount / pageSize) + (tableRowCount % pageSize > 0 ? 1 : 0);
-        for(int i = 1; i < tablePageSize; i++){
+        for(i = 1; i < tablePageSize; i++){
             // 循环获取每一个分页的数据
             final int offset = (i - 1) * pageSize;
             sql = masterDatabaseConverter.getPaginationSQL(ti, offset, pageSize);
-            this.batchUpdate(masterDatabaseDao, sqlBuilder, insertBuffer, sql);
-            // 清空已经插入的缓存数据
-            insertBuffer.clear();
+            this.batchUpdate(masterDatabaseDao, sqlBuilder, sql, argTypes);
         }
 
     }
+
+
 
     /**
      * 批量插入
      * @param masterDatabaseDao BasicDatabaseDao
      * @param sqlBuilder insert sql语句，如：insert into T (col1, col2, col3, ...) values (?, ?, ?, ...)
-     * @param insertBuffer 预处理的行数据
      * @param querySql 查询执行的SQL
      */
     private void batchUpdate(BasicDatabaseDao masterDatabaseDao,
                              StringBuilder sqlBuilder,
-                             List<Object[]> insertBuffer,
-                             String querySql) {
-        System.out.println(querySql);
+                             String querySql,
+                             int[] argTypes) {
+
+        // 源端
+        final JdbcTemplate2 masterJdbcTemplate = masterDatabaseDao.getJdbcTemplate();
+        // 目标端
+        final JdbcTemplate2 jdbcTemplate = this.getDatabaseDao().getJdbcTemplate();
+
         // 查询某一页的所有的数据
-        List<Map<String, Object>> bufferRows = masterDatabaseDao.getJdbcTemplate().queryForList(querySql);
-        // 所有列数
-        bufferRows.forEach(row -> insertBuffer.add(CommonUtils.getMapValues(row)));
+        List<Object[]> batchArgs = masterJdbcTemplate.query(querySql, (rs, rowNum) -> {
+            Object[] values = new Object[rs.getMetaData().getColumnCount()];
+            for (int i = 0, len = values.length; i < len; i++) {
+                values[i] = rs.getObject(i + 1);
+            }
+            return values;
+        });
+
+        // sqlserver:
+        // 将截断字符串或二进制数据
+        // https://support.microsoft.com/en-us/topic/kb4468101-improvement-optional-replacement-for-string-or-binary-data-would-be-truncated-message-with-extended-information-in-sql-server-2016-and-2017-a4279ad6-1d3b-3960-77ef-c82a909f4b89
 
         // 批量插入
-        try {
-            this.getDatabaseDao().getJdbcTemplate().batchUpdate(sqlBuilder.toString(), insertBuffer);
-        } catch (Exception e) {
-            e.printStackTrace();
+        try{
+            // jdbcTemplate.batchUpdate(sqlBuilder.toString(), new BatchPreparedStatementSetter() {
+            //     @Override
+            //     public void setValues(@NonNull PreparedStatement ps, int i) throws SQLException {
+            //         Object[] values = batchArgs.get(i);
+            //         int colIndex = 0;
+            //         for (Object value : values) {
+            //             colIndex++;
+            //             // StatementCreatorUtils.setParameterValue(ps, colIndex, SqlTypeValue.TYPE_UNKNOWN, value);
+            //             if(value == null){
+            //                 ps.setNull(colIndex, argTypes[colIndex - 1]);
+            //                 continue;
+            //             }
+            //
+            //             if(argTypes[colIndex - 1] == Types.CLOB){
+            //                 ps.setClob(colIndex, new StringReader(value.toString()));
+            //             } else {
+            //                 ps.setObject(colIndex, value, argTypes[colIndex - 1]);
+            //             }
+            //         }
+            //     }
+            //     @Override
+            //     public int getBatchSize() {
+            //         return batchArgs.size();
+            //     }
+            // });
+            jdbcTemplate.batchUpdate(sqlBuilder.toString(), batchArgs, argTypes);
+
+        } catch (Throwable e){
+            log2("\033[33m" + e.getMessage().replace(sqlBuilder.toString(), "...") + "\033[m");
         }
+
+    }
+
+    /**
+     * 修改列的类型，针对不支持的可以动态修改
+     * @param dataType 数据类型
+     * @return 数据类型
+     */
+    protected int changeDataType(int dataType) {
+        return dataType;
     }
 
 

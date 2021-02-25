@@ -9,6 +9,7 @@ import com.liaobaikai.ngoxdb.info.DatabaseInfo;
 import com.liaobaikai.ngoxdb.info.IndexInfo2;
 import com.liaobaikai.ngoxdb.info.TableInfo;
 import com.liaobaikai.ngoxdb.rs.*;
+import com.liaobaikai.ngoxdb.utils.CommonUtils;
 import com.liaobaikai.ngoxdb.utils.NumberUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ArrayUtils;
@@ -38,6 +39,14 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
     public BasicDatabaseDao(JdbcTemplate2 jdbcTemplate){
         this.jdbcTemplate = jdbcTemplate;
         this.catalog = jdbcTemplate.execute(Connection::getCatalog);
+    }
+
+    protected void log(String msg, Object...args){
+        CommonUtils.log(this.jdbcTemplate.getDatabaseConfig(), msg, args);
+    }
+
+    protected void log2(String msg, Object...args){
+        CommonUtils.log2(this.jdbcTemplate.getDatabaseConfig(), msg, args);
     }
 
     @Override
@@ -76,11 +85,15 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
             }
 
             if(tableList.size() == 0){
-                log.info("过滤的表名: {}, 查询到表的个数：{}个。", JSONObject.toJSONString(tableName), tableList.size());
+                log2("Query table name: {}, total: {}", JSONObject.toJSONString(tableName));
             } else {
                 StringBuilder stringBuilder = new StringBuilder();
-                tableList.forEach(tableInfo -> stringBuilder.append(tableInfo.getTableName()).append(", "));
-                log.info("匹配到表：{}个，分别是：{}", tableList.size(), stringBuilder.toString());
+                int i = 0;
+                int len = Integer.parseInt((tableList.size() + "").length() + "");
+                for(TableInfo tableInfo: tableList){
+                    stringBuilder.append(String.format("%"+len+"s): ", ++i)).append(tableInfo.getTableName()).append("\n");
+                }
+                log2("Query table name: {}, total: {}:\n{}", JSONObject.toJSONString(tableName), tableList.size(), stringBuilder.toString());
             }
 
             return tableList;
@@ -293,6 +306,11 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
     @Override
     public void dropTable(String tableName) {
         this.jdbcTemplate.execute("DROP TABLE " + tableName);
+    }
+
+    @Override
+    public void deleteTable(String tableName) {
+        this.jdbcTemplate.execute("DELETE FROM " + tableName);
     }
 
     /**

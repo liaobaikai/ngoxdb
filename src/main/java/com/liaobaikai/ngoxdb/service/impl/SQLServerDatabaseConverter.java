@@ -101,6 +101,19 @@ public class SQLServerDatabaseConverter extends BasicDatabaseConverter {
     }
 
     @Override
+    public String getDatabaseDataTypeDefault(String masterDataTypeDef, int dataType) {
+        String defaultValue = super.getDatabaseDataTypeDefault(masterDataTypeDef, dataType);
+        if(dataType == Types.BOOLEAN){
+            if("true".equals(masterDataTypeDef)) {
+                return "1";
+            } else if("false".equals(masterDataTypeDef)){
+                return "0";
+            }
+        }
+        return defaultValue;
+    }
+
+    @Override
     public List<String> getUnsupportedFunctions() {
         return new ArrayList<String>(){
             {
@@ -348,21 +361,41 @@ public class SQLServerDatabaseConverter extends BasicDatabaseConverter {
         SQLServerType sqlServerType = SQLServerType.getByJdbcType(columnInfo.getDataType());
         switch (sqlServerType) {
 
-            case TIME:
             case DATETIME2:
             case DATETIMEOFFSET:
-                //    time(7)
                 //    datetime2(7)
                 //    datetimeoffset(7)
+                if(this.isSameDatabaseVendor()){
+                    sqlBuilder.append(sqlServerType.getName());
+                    if(columnInfo.getDecimalDigits() > 0){
+                        sqlBuilder.append("(").append(columnInfo.getDecimalDigits()).append(")");
+                    }
+                } else {
+                    sqlBuilder.append(SQLServerType.DATETIME.getName());
+                }
+
+                break;
+            case TIME:
+                //    time(7)
                 sqlBuilder.append(sqlServerType.getName());
                 if(columnInfo.getDecimalDigits() > 0){
                     sqlBuilder.append("(").append(columnInfo.getDecimalDigits()).append(")");
                 }
-
                 break;
-
             case CHAR:
             case VARCHAR:
+                // if(DatabaseVendorEnum.isMicrosoftAccess(this.getMasterDatabaseVendor())){
+                //     // access数据库不区分varchar/nvarchar,默认使用nvarchar
+                //     if(columnInfo.getColumnSize() > SQLServerType.SHORT_VARTYPE_MAX_CHARS * 2) {
+                //         // 最多8000个英文，4000个汉字
+                //         // sqlServerType = SQLServerType.VARCHARMAX;
+                //         sqlBuilder.append(SQLServerType.NVARCHARMAX.getName()).append("(max)");
+                //         break;
+                //     }
+                //     sqlBuilder.append(SQLServerType.NVARCHAR.getName()).append("(").append(columnInfo.getColumnSize()).append(")");
+                //     break;
+                // }
+
                 if(columnInfo.getColumnSize() > SQLServerType.SHORT_VARTYPE_MAX_CHARS * 2) {
                     // 最多8000个英文，4000个汉字
                     // sqlServerType = SQLServerType.VARCHARMAX;
@@ -371,6 +404,7 @@ public class SQLServerDatabaseConverter extends BasicDatabaseConverter {
                 }
 
                 sqlBuilder.append(sqlServerType.getName()).append("(").append(columnInfo.getColumnSize()).append(")");
+
                 break;
 
             case NCHAR:
@@ -402,7 +436,8 @@ public class SQLServerDatabaseConverter extends BasicDatabaseConverter {
             case DECIMAL:
             case NUMERIC:
                 // 双精度
-                sqlBuilder.append(sqlServerType.getName()).append("(").append(columnInfo.getColumnSize()).append(",").append(columnInfo.getDecimalDigits()).append(")");
+                // 指定的列精度 65 大于最大精度 38。
+                sqlBuilder.append(sqlServerType.getName()).append("(").append(Math.min(columnInfo.getColumnSize(), 38)).append(",").append(columnInfo.getDecimalDigits()).append(")");
                 break;
             case UNKNOWN:
                 switch (columnInfo.getDataType()){
@@ -413,6 +448,11 @@ public class SQLServerDatabaseConverter extends BasicDatabaseConverter {
                     case Types.BLOB:
                         // VARBINARYMAX
                         sqlBuilder.append(SQLServerType.VARBINARYMAX.getName()).append("(max)");
+                        break;
+                    case Types.BOOLEAN:
+                        // 不支持 boolean类型，需要转换成bit
+                        // https://stackoverflow.com/questions/1777257/how-do-you-create-a-yes-no-boolean-field-in-sql-server
+                        sqlBuilder.append(SQLServerType.BIT.getName());
                         break;
                     default:
                         // other...

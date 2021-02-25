@@ -202,6 +202,12 @@ public interface DatabaseDao {
     void dropTable(String tableName);
 
     /**
+     * 删除表数据
+     * @param tableName 表名
+     */
+    void deleteTable(String tableName);
+
+    /**
      * 截断表
      * @param tableName 表名
      */

@@ -31,8 +31,8 @@ import java.util.*;
 @Component
 public class ConfigManager implements BeanFactoryAware {
 
-    private static final String MASTER_DATASOURCE_CONFIG_PREFIX      = "spring.datasource.master";
-    private static final String SLAVE_DATASOURCE_CONFIG_PREFIX       = "spring.datasource.slave";
+    private static final String MASTER_DATASOURCE_CONFIG_PREFIX      = "ngoxdb.master";
+    private static final String SLAVE_DATASOURCE_CONFIG_PREFIX       = "ngoxdb.slave";
 
     // private static final Map<String, DatabaseConverter> DATABASE_CONVERTER_MAP = new HashMap<>();
 
@@ -61,6 +61,7 @@ public class ConfigManager implements BeanFactoryAware {
         // master
         DatabaseConfig databaseConfig = binder.bind(MASTER_DATASOURCE_CONFIG_PREFIX, Bindable.of(DatabaseConfig.class)).get();
         System.out.println("\tMaster");
+        databaseConfig.setName("MASTER");
         System.out.println("\t\tDatabase vendor: "+ databaseConfig.getDatabase() + "\n\t\tUsername: " + databaseConfig.getUsername() + "\n\t\tJDBC-URL: " + databaseConfig.getUrl());
         DataSource ds = buildDataSource(databaseConfig, "master-data-source");
         jdbcTemplate = new JdbcTemplate2(ds, databaseConfig);
@@ -82,6 +83,7 @@ public class ConfigManager implements BeanFactoryAware {
             databaseConfig = databaseConfigs.get(i);
             ds = buildDataSource(databaseConfig, "slave-data-source" + i);
             System.out.println("\t\t("+(i + 1)+") Database vendor: "+ databaseConfig.getDatabase() + ", Username: " + databaseConfig.getUsername() + ", JDBC-URL: " + databaseConfig.getUrl());
+            databaseConfig.setName("SLAVE-" + (i + 1));
             jdbcTemplates.add(new JdbcTemplate2(ds, databaseConfig));
         }
 

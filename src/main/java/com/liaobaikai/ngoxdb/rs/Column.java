@@ -112,7 +112,7 @@ public class Column extends TableBase{
     /**
      * source type of a distinct type or user-generated Ref type, SQL type from java.sql.Types (null if DATA_TYPE isn't DISTINCT or user-generated REF)
      */
-    private String sourceDataType;
+    private int sourceDataType;
 
     /**
      * 是否为自动增长列

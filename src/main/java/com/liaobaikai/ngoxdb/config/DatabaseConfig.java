@@ -49,6 +49,11 @@ public class DatabaseConfig {
     };
 
     /**
+     * 配置标识
+     */
+    private String name;
+
+    /**
      * 数据库厂家 {@link com.liaobaikai.ngoxdb.enums.DatabaseVendorEnum}
      */
     private String database;
@@ -154,6 +159,11 @@ public class DatabaseConfig {
      */
     private int pageSize = 1000;
 
+    /**
+     * 是否批量插入
+     */
+    private boolean batchInsert = true;
+
 
     public String getDriverClassName() {
 
@@ -191,7 +201,11 @@ public class DatabaseConfig {
         String driverClassName = this.getDriverClassName();
 
         StringBuilder urlBuilder = new StringBuilder("jdbc:");
-        if (DatabaseVendorEnum.SQLSERVER.getDriverClassName().equals(driverClassName)) {
+        if(DatabaseVendorEnum.SQLITE.getDriverClassName().equals(driverClassName)){
+            // jdbc:sqlite:/data/test1.db
+            urlBuilder.append("sqlite:").append(this.localFile);
+            return urlBuilder.toString();
+        } else if (DatabaseVendorEnum.SQLSERVER.getDriverClassName().equals(driverClassName)) {
             if(StringUtils.isEmpty(this.port)){
                 this.port = Integer.valueOf(DatabaseVendorEnum.SQLSERVER.getDefaultPort()).toString();
             }

@@ -16,7 +16,6 @@ public enum MsAccessType implements SQLType {
 
     UNKNOWN(Category.UNKNOWN, "unknown", 999, Object.class.getName(), 0L),
 
-
     TINYINT(Category.NUMERIC, "tinyint", java.sql.Types.TINYINT, Short.class.getName(), 3L),
     BIT(Category.NUMERIC, "bit", java.sql.Types.BIT, Boolean.class.getName(), 1L),
     SMALLINT(Category.NUMERIC, "smallint", java.sql.Types.SMALLINT, Short.class.getName(), 5L),
@@ -37,25 +36,24 @@ public enum MsAccessType implements SQLType {
 
     TEXT(Category.LONG_CHARACTER, "text", java.sql.Types.LONGVARCHAR, String.class.getName(), 65535L),
 
-
     CHAR(Category.CHARACTER, "char", Types.CHAR, String.class.getName(), 255L),
     VARCHAR(Category.CHARACTER, "varchar", Types.VARCHAR, String.class.getName(), 255L),
     CLOB(Category.LONG_CHARACTER, "clob", Types.CLOB, String.class.getName(), 0xffffffffL),
-    LONGVARCHAR(Category.LONG_CHARACTER, "clob", Types.LONGNVARCHAR, String.class.getName(), 0xffffffffL),
+    LONGVARCHAR(Category.LONG_CHARACTER, "clob", Types.CLOB, String.class.getName(), 0xffffffffL),
 
     BINARY(Category.BINARY, "binary", Types.BINARY, "[B", 255L),
     VARBINARY(Category.BINARY, "varbinary", Types.VARBINARY, "[B", 255L),
     BLOB(Category.LONG_BINARY, "blob", Types.BLOB, String.class.getName(), 0xffffffffL),
-    LONGVARBINARY(Category.LONG_BINARY, "blob", Types.LONGVARBINARY, "[B", 0xffffffffL),
+    LONGVARBINARY(Category.LONG_BINARY, "blob", Types.BLOB, "[B", 0xffffffffL),
 
-
-    // jdbc unicode 不支持
-    NTEXT(Category.LONG_CHARACTER, "text", java.sql.Types.LONGVARCHAR, String.class.getName(), 65535L),
-
+    /////////////////////////////////////////////////////////////////////////////////
+    //             不支持的类型
+    /////////////////////////////////////////////////////////////////////////////////
+    NTEXT(Category.LONG_CHARACTER, "text", java.sql.Types.LONGVARCHAR, String.class.getName(), 255L),
     NCHAR(Category.CHARACTER, "char", Types.NCHAR, Character.class.getName(), 255L),
     NVARCHAR(Category.CHARACTER, "varchar", Types.NVARCHAR, String.class.getName(), 255L),
     NCLOB(Category.LONG_CHARACTER, "clob", Types.NCLOB, String.class.getName(), 0xffffffffL),
-    LONGNVARCHAR(Category.LONG_CHARACTER, "clob", Types.LONGNVARCHAR, String.class.getName(), 0xffffffffL),
+    LONGNVARCHAR(Category.LONG_CHARACTER, "clob", Types.NCLOB, String.class.getName(), 0xffffffffL),
 
     ;
 

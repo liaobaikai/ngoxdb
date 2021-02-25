@@ -101,9 +101,10 @@ public interface DatabaseConverter {
     /**
      * 获取时间默认值
      * @param masterDataTypeDef 主数据库的时间默认值
+     * @param dataType 数据类型
      * @return 对应的时间默认值
      */
-    String getDatabaseDataTypeDefault(String masterDataTypeDef);
+    String getDatabaseDataTypeDefault(String masterDataTypeDef, int dataType);
 
     /**
      * 获取本数据库的每一个字符多少个字节。
@@ -116,6 +117,13 @@ public interface DatabaseConverter {
      * @return list
      */
     List<String> getUnsupportedFunctions();
+
+    /**
+     * 从源数据库中拉取数据。
+     * @param ti 表信息
+     * @param slaveDatabaseConverters 目标数据库转换器
+     */
+    void pullData(TableInfo ti, List<DatabaseConverter> slaveDatabaseConverters);
 
     /**
      * 迁移数据

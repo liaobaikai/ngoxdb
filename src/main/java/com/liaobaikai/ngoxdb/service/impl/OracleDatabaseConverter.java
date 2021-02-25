@@ -727,7 +727,7 @@ public class OracleDatabaseConverter extends BasicDatabaseConverter {
             // 默认值
             if (columnInfo.getColumnDef() != null) {
                 // 默认值
-                String dataTypeDef = this.getDatabaseDataTypeDefault(columnInfo.getColumnDef());
+                String dataTypeDef = this.getDatabaseDataTypeDefault(columnInfo.getColumnDef(), columnInfo.getDataType());
                 // 时间固定默认值，如：1970-01-01 01:01:01
                 // ORA-01847: 月份中日的值必须介于 1 和当月最后一日之间
                 // oracle需要将字符串转为时间保存。

@@ -223,5 +223,4 @@ public class MySQLDatabaseDao extends BasicDatabaseDao {
 
         return resultList;
     }
-
 }

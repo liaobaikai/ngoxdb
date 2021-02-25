@@ -12,10 +12,8 @@ import com.liaobaikai.ngoxdb.info.TableInfo;
 import com.liaobaikai.ngoxdb.rs.ImportedKey;
 import com.liaobaikai.ngoxdb.service.BasicDatabaseConverter;
 import com.liaobaikai.ngoxdb.types.MsAccessType;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.sql.Types;
 import java.util.List;
 import java.util.Map;
 
@@ -24,7 +22,6 @@ import java.util.Map;
  * @author baikai.liao
  * @Time 2021-01-29 23:42:45
  */
-@Slf4j
 @Service
 public class AccessDatabaseConverter extends BasicDatabaseConverter {
 
@@ -39,6 +36,11 @@ public class AccessDatabaseConverter extends BasicDatabaseConverter {
                                    String masterDatabaseVendor,
                                    DatabaseConfig databaseConfig) {
         super(jdbcTemplate, isMaster, masterDatabaseVendor, databaseConfig);
+        // access替换表操作无效
+        databaseConfig.setReplaceTable(false);
+        // 批量插入可能会存在报错
+        // java.sql.SQLException: General error
+        databaseConfig.setBatchInsert(false);
         this.databaseDao = new AccessDatabaseDao(jdbcTemplate);
         this.truncateMetadata();
     }
@@ -203,20 +205,16 @@ public class AccessDatabaseConverter extends BasicDatabaseConverter {
 
 
 
-    @Override
-    public boolean beforeCreateTable(TableInfo ti) {
-
-        DatabaseConfig databaseConfig = this.getDatabaseDao().getJdbcTemplate().getDatabaseConfig();
-        if(databaseConfig.isReplaceTable()){
-            // 替换表
-            // 查询表是否存在
-            if(this.getDatabaseDao().getTableCount(this.isSameDatabaseVendor() ? ti.getTableSchem() : null, ti.getTableName()) > 0){
-                log.info("已跳过(ReplaceTable)：表{}已存在！", ti.getTableName());
-                return false;
-            }
-        }
-        return true;
-    }
+    // @Override
+    // public boolean beforeCreateTable(TableInfo ti) {
+    //     // 查询表是否存在
+    //     if(this.getDatabaseDao().getTableCount(null, ti.getTableName()) > 0){
+    //         // access不支持删除表操作。
+    //         skip("Table {} already exists! ucanaccess does not support drop table.", this.getRightName(ti.getTableName()));
+    //         return false;
+    //     }
+    //     return true;
+    // }
 
     @Override
     public BasicDatabaseDao getDatabaseDao() {
@@ -225,12 +223,25 @@ public class AccessDatabaseConverter extends BasicDatabaseConverter {
 
     @Override
     public String getPaginationSQL(TableInfo ti, int offset, int limit) {
-        return "";
+        // 获取主键
+        if(ti.getPrimaryKeys().size() == 1){
+            // 获取主键列名
+            final String colName = ti.getPrimaryKeys().get(0).getColumnName();
+            // 延迟关联
+            // https://www.cnblogs.com/wang-meng/p/ae6d1c4a7b553e9a5c8f46b67fb3e3aa.html
+            return String.format("SELECT * FROM %s ORDER BY %s LIMIT %s, %s",
+                    this.getRightName(ti.getTableName()),
+                    this.getRightName(colName),
+                    offset, limit);
+        }
+
+        // 无主键、多主键使用默认的分页查询方式
+        return String.format("SELECT * FROM %s LIMIT %s OFFSET %s", this.getRightName(ti.getTableName()), limit, offset);
     }
 
     @Override
     protected void buildForeignKeyChangeRules(StringBuilder sBuilder, ImportedKey importedKey) {
-        log.info("Microsoft-Access database not support foreign key on update rule and on delete rule !!!!");
+        log("Microsoft-Access database not support foreign key on update rule and on delete rule !!!!");
     }
 
     @Override
@@ -257,7 +268,9 @@ public class AccessDatabaseConverter extends BasicDatabaseConverter {
             case NCHAR:
             case CHAR:
                 // 长度
-                if(columnInfo.getColumnSize() > MsAccessType.CHAR.getPrecision()){
+                if(columnInfo.getColumnSize() > MsAccessType.TEXT.getPrecision()){
+                    sqlBuilder.append(MsAccessType.LONGVARCHAR.getName());
+                } else if(columnInfo.getColumnSize() > MsAccessType.CHAR.getPrecision()){
                     sqlBuilder.append(MsAccessType.TEXT.getName());
                 } else {
                     sqlBuilder.append(accessType.getName()).append("(").append(columnInfo.getColumnSize()).append(")");
@@ -266,7 +279,9 @@ public class AccessDatabaseConverter extends BasicDatabaseConverter {
 
             case NVARCHAR:
             case VARCHAR:
-                if(columnInfo.getColumnSize() > MsAccessType.VARCHAR.getPrecision()){
+                if(columnInfo.getColumnSize() > MsAccessType.TEXT.getPrecision()){
+                    sqlBuilder.append(MsAccessType.LONGVARCHAR.getName());
+                } else if(columnInfo.getColumnSize() > MsAccessType.VARCHAR.getPrecision()){
                     sqlBuilder.append(MsAccessType.TEXT.getName());
                 } else {
                     sqlBuilder.append(accessType.getName()).append("(").append(columnInfo.getColumnSize()).append(")");
@@ -308,11 +323,16 @@ public class AccessDatabaseConverter extends BasicDatabaseConverter {
 
                 sqlBuilder.append(")");
                 break;
-            case BOOLEAN:
-                sqlBuilder.append(MsAccessType.BIT.getName());
+
+            case NTEXT:
+                sqlBuilder.append(MsAccessType.NTEXT.getName());
+                break;
+            case NCLOB:
+            case LONGNVARCHAR:
+                sqlBuilder.append(MsAccessType.CLOB.getName());
                 break;
 
-
+            case BOOLEAN:
 
             case REAL:
             case FLOAT:
@@ -323,12 +343,7 @@ public class AccessDatabaseConverter extends BasicDatabaseConverter {
             case BLOB:
             case LONGVARBINARY:
 
-            case NCLOB:
-            case LONGNVARCHAR:
-                // jdbc unicode 不支持
-
             case TEXT:
-            case NTEXT:
 
             case TIME:
             case TIMESTAMP:
@@ -344,44 +359,7 @@ public class AccessDatabaseConverter extends BasicDatabaseConverter {
                 break;
             case UNKNOWN:
                 // 未知的
-                // switch (columnInfo.getDataType()){
-                //     // case Types.LONGNVARCHAR:
-                //     //     // SQLServer NText
-                //     //     sqlBuilder.append(MsAccessType.CLOB.getName());
-                //     //     break;
-                //     // case Types.NCHAR:
-                //     //     // NChar
-                //     //     if(columnInfo.getColumnSize() > MsAccessType.TEXT.getPrecision()){
-                //     //         sqlBuilder.append(MsAccessType.CLOB.getName());
-                //     //     } else if(columnInfo.getColumnSize() > MsAccessType.CHAR.getPrecision()){
-                //     //         sqlBuilder.append(MsAccessType.TEXT.getName());
-                //     //     } else {
-                //     //         sqlBuilder.append(MsAccessType.CHAR.getName()).append("(").append(columnInfo.getColumnSize()).append(")");
-                //     //     }
-                //     //     break;
-                //     case Types.BINARY:
-                //         if(columnInfo.getColumnSize() > MsAccessType.BINARY.getPrecision()){
-                //             sqlBuilder.append(MsAccessType.BLOB.getName());
-                //         } else {
-                //             sqlBuilder.append(MsAccessType.BINARY.getName()).append("(").append(columnInfo.getColumnSize()).append(")");
-                //         }
-                //         break;
-                //     case Types.VARBINARY:
-                //         if(columnInfo.getColumnSize() > MsAccessType.VARBINARY.getPrecision()){
-                //             sqlBuilder.append(MsAccessType.BLOB.getName());
-                //         } else {
-                //             sqlBuilder.append(MsAccessType.VARBINARY.getName()).append("(").append(columnInfo.getColumnSize()).append(")");
-                //         }
-                //         break;
-                //     case Types.LONGVARBINARY:
-                //         sqlBuilder.append(MsAccessType.BLOB.getName());
-                //         break;
-                //
-                //     default:
-                //         // varbinary
-                //
-                // }
-                System.out.println("unknown:" + columnInfo.getDataType() + ", " + columnInfo.getTypeName());
+                log("unknown:" + columnInfo.getDataType() + ", " + columnInfo.getTypeName());
                 return;
             default:
                 sqlBuilder.append(columnInfo.getTypeName());
@@ -393,4 +371,10 @@ public class AccessDatabaseConverter extends BasicDatabaseConverter {
         return "autoincrement";
     }
 
+    @Override
+    protected int changeDataType(int dataType) {
+        // 根据 StatementCreatorUtils.setValue 来看
+        // clob类型的数据会被转换为字符串，实际上存储到access database中会保存org.hsqldb.types.ClobDataID@17f
+        return dataType;
+    }
 }

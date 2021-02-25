@@ -1,5 +1,6 @@
 package com.liaobaikai.ngoxdb.service.impl;
 
+import com.alibaba.fastjson.JSON;
 import com.liaobaikai.ngoxdb.boot.JdbcTemplate2;
 import com.liaobaikai.ngoxdb.config.DatabaseConfig;
 import com.liaobaikai.ngoxdb.dao.BasicDatabaseDao;
@@ -11,16 +12,19 @@ import com.liaobaikai.ngoxdb.enums.fn.DatabaseFunctionEnum;
 import com.liaobaikai.ngoxdb.enums.fn.DateTypeFunctionEnum;
 import com.liaobaikai.ngoxdb.enums.fn.MathematicalFunctionEnum;
 import com.liaobaikai.ngoxdb.enums.fn.StringFunctionEnum;
-import com.liaobaikai.ngoxdb.info.*;
+import com.liaobaikai.ngoxdb.info.ColumnInfo;
+import com.liaobaikai.ngoxdb.info.IndexInfo2;
+import com.liaobaikai.ngoxdb.info.TableInfo;
 import com.liaobaikai.ngoxdb.rs.ImportedKey;
+import com.liaobaikai.ngoxdb.rs.PrimaryKey;
 import com.liaobaikai.ngoxdb.service.BasicDatabaseConverter;
 import com.mysql.cj.MysqlType;
-import com.sun.org.apache.bcel.internal.generic.BREAKPOINT;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -97,7 +101,7 @@ public class MySQLDatabaseConverter extends BasicDatabaseConverter {
             // 默认值
             if (columnInfo.getColumnDef() != null) {
                 // 时间默认值
-                String dataTypeDef = this.getDatabaseDataTypeDefault(columnInfo.getColumnDef());
+                String dataTypeDef = this.getDatabaseDataTypeDefault(columnInfo.getColumnDef(), columnInfo.getDataType());
                 sqlBuilder.append("DEFAULT ").append(dataTypeDef == null ? columnInfo.getColumnDef(): dataTypeDef).append(" ");
             }
 
@@ -177,6 +181,8 @@ public class MySQLDatabaseConverter extends BasicDatabaseConverter {
                 // columnInfo.getColumnSize() == 0 的时候，默认保存到数据库为10
                 if(columnInfo.getColumnSize() <= 0){
                     columnInfo.setColumnSize(10);
+                } else if(columnInfo.getColumnSize() > MysqlType.DECIMAL.getPrecision()){
+                    columnInfo.setColumnSize(MysqlType.DECIMAL.getPrecision().intValue());
                 }
                 sqlBuilder.append(MysqlType.DECIMAL.getName()).append("(").append(columnInfo.getColumnSize());
                 if (columnInfo.getDecimalDigits() > 0) {
@@ -786,11 +792,16 @@ public class MySQLDatabaseConverter extends BasicDatabaseConverter {
             // 延迟关联
             // https://www.cnblogs.com/wang-meng/p/ae6d1c4a7b553e9a5c8f46b67fb3e3aa.html
             return String.format("SELECT * FROM %s INNER JOIN (SELECT %s FROM %s ORDER BY %s LIMIT %s, %s) AS X USING(%s)",
-                    ti.getTableName(), colName, ti.getTableName(), colName, offset, limit, colName);
+                    this.getRightName(ti.getTableName()),
+                    this.getRightName(colName),
+                    this.getRightName(ti.getTableName()),
+                    this.getRightName(colName),
+                    offset, limit,
+                    this.getRightName(colName));
         }
 
         // 无主键、多主键使用默认的分页查询方式
-        return String.format("SELECT * FROM %s LIMIT %s, %s", ti.getTableName(), offset, limit);
+        return String.format("SELECT * FROM %s LIMIT %s, %s", this.getRightName(ti.getTableName()), offset, limit);
     }
 
 
@@ -803,4 +814,71 @@ public class MySQLDatabaseConverter extends BasicDatabaseConverter {
     public String getAutoincrement() {
         return "AUTO_INCREMENT";
     }
+
+    @Override
+    public void buildPrimaryKeys(TableInfo ti, StringBuilder sqlBuilder) {
+        // 考虑到其他数据库存在自动增长的属性，且不是主键的问题。
+        // 自动增长的字段需要为主键
+        // Incorrect table definition; there can be only one auto column and it must be defined as a key
+        // 一个表仅支持一个自动增长的字段。
+        if(ti.getPrimaryKeys().size() == 0){
+            return;
+        }
+
+        // 获取一个自动增长的列名
+        String colName = null;
+        for(ColumnInfo c: ti.getColumns()){
+            if(c.isAutoincrement()){
+                colName = c.getColumnName();
+                break;
+            }
+        }
+
+        // 是否为有效的主键列
+        boolean valid = false;
+        if(colName != null){
+            for(PrimaryKey pk: ti.getPrimaryKeys()){
+                if (pk.getColumnName().equals(colName)) {
+                    valid = true;
+                    break;
+                }
+            }
+        } else {
+            valid = true;
+        }
+
+        sqlBuilder.append("PRIMARY KEY (");
+        // 再次排序
+        ti.getPrimaryKeys().sort(Comparator.comparing(PrimaryKey::getKeySeq));
+
+        if(valid){
+            ti.getPrimaryKeys().forEach(pk -> sqlBuilder.append(getRightName(pk.getColumnName())).append(","));
+        } else {
+            // 从主键列表中没有找到主键，自动增长需要为主键。
+            sqlBuilder.append(getRightName(colName)).append(",");
+
+            // 将原来的主键修改为唯一约束
+            StringBuilder sBuilder = new StringBuilder("ALTER TABLE ");
+            sBuilder.append(this.getRightName(ti.getTableName()));
+            sBuilder.append(" ADD CONSTRAINT UNIQUE KEY (");
+            StringBuilder sb0 = new StringBuilder();
+            ti.getPrimaryKeys().forEach(pk -> {
+                sBuilder.append(getRightName(pk.getColumnName())).append(",");
+                sb0.append(getRightName(pk.getColumnName())).append(",");
+            });
+            sBuilder.delete(sBuilder.length() - 1, sBuilder.length()).append(")");
+
+            warn("MySQL: Table {} primary key {} change to column {}!!!!",
+                    this.getRightName(ti.getTableName()),
+                    sb0.delete(sb0.length() - 1, sb0.length()).toString(),
+                    this.getRightName(colName));
+
+
+            // 保存
+            this.databaseDao.insertMetadata(new SlaveMetaDataEntity(ti.getTableName(), SlaveMetaDataEntity.TYPE_UNIQUE_INDEX, sBuilder.toString()));
+        }
+
+        sqlBuilder.delete(sqlBuilder.length() - 1, sqlBuilder.length()).append("),");
+    }
+
 }

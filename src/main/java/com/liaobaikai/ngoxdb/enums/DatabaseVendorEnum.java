@@ -18,6 +18,7 @@ public enum DatabaseVendorEnum {
     ORACLE("oracle", "oracle.jdbc.OracleDriver", 1521),
     DB2("db2", "com.ibm.db2.jcc.DB2Driver", 5000),
     MICROSOFT_ACCESS("msaccess", "net.ucanaccess.jdbc.UcanaccessDriver", -1),
+    SQLITE("sqlite", "org.sqlite.JDBC", -1),
 
     ;
 
