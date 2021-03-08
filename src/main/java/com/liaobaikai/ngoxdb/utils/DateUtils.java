@@ -1,8 +1,6 @@
 package com.liaobaikai.ngoxdb.utils;
 
-import com.liaobaikai.ngoxdb.enums.DatabaseVendorEnum;
-
-import java.sql.Types;
+import java.sql.Timestamp;
 
 /**
  * @author baikai.liao
@@ -11,48 +9,44 @@ import java.sql.Types;
 public class DateUtils {
 
     /**
-     * 转换默认值
+     * 将毫秒格式化为可视化时间
      *
-     * @param masterDataBaseVendor {@link com.liaobaikai.ngoxdb.enums.DatabaseVendorEnum vendor}
-     * @param slaveDataBaseVendor  {@link com.liaobaikai.ngoxdb.enums.DatabaseVendorEnum vendor}
-     * @param defaultValue         默认值
-     * @param jdbcType             jdbc类型
-     * @return
+     * @param mills 毫秒
+     * @return 如 1100 00:00:01 100
      */
-    public static String convert(String masterDataBaseVendor,
-                                 String slaveDataBaseVendor,
-                                 String defaultValue,
-                                 int jdbcType) {
+    public static String format(long mills) {
+        // 毫秒
+        long m = (mills % 1000);
+        long s = (mills / 1000) % 60;
+        long M = (mills / 60000) % 60;
+        long h = (mills / 3600000) % 60;
 
-        // 厂家相同
-        if (masterDataBaseVendor.equals(slaveDataBaseVendor)
-                || ((DatabaseVendorEnum.isMySQL(masterDataBaseVendor) || DatabaseVendorEnum.isMariadb(masterDataBaseVendor)) && (DatabaseVendorEnum.isMySQL(slaveDataBaseVendor) || DatabaseVendorEnum.isMariadb(slaveDataBaseVendor)))) {
-            return defaultValue;
-        }
-
-        if (!(jdbcType == Types.DATE
-                || jdbcType == Types.TIMESTAMP
-                || jdbcType == Types.TIME
-                || jdbcType == Types.TIME_WITH_TIMEZONE
-                || jdbcType == Types.TIMESTAMP_WITH_TIMEZONE
-                || jdbcType == microsoft.sql.Types.DATETIMEOFFSET
-                || jdbcType == microsoft.sql.Types.SMALLDATETIME)) {
-            return defaultValue;
-        }
-
-        // 源数据库是mysql
-        if ((DatabaseVendorEnum.MYSQL.getVendor().equals(masterDataBaseVendor) || DatabaseVendorEnum.MARIADB.getVendor().equals(masterDataBaseVendor))
-                && DatabaseVendorEnum.SQLSERVER.getVendor().equals(slaveDataBaseVendor)) {
-            if ("CURRENT_TIMESTAMP".equalsIgnoreCase(defaultValue)) {
-                return "getdate()";
-            } else if ("current_timestamp()".equalsIgnoreCase(defaultValue)) {
-                return "getdate()";
-            } else {
-                // ....
-            }
-        }
-
-        return defaultValue;
+        return String.format("%02d:%02d:%02d %03d", h, M, s, m);
     }
 
+    /**
+     * 去掉毫秒值
+     *
+     * @param src {@link java.sql.Timestamp}
+     * @return {@link java.sql.Timestamp}
+     */
+    public static Timestamp stripMills(Timestamp src) {
+        if (src.getNanos() > 0) {
+            return new Timestamp(src.getTime() - src.getNanos() / 1000000);
+        }
+        return src;
+    }
+
+    public static boolean isDateValue(Class<?> inValueType) {
+        return java.util.Date.class.isAssignableFrom(inValueType)
+                || java.sql.Date.class.isAssignableFrom(inValueType)
+                || java.sql.Time.class.isAssignableFrom(inValueType)
+                || java.sql.Timestamp.class.isAssignableFrom(inValueType);
+    }
+
+    public static void main(String[] args) {
+
+        format(1100);
+
+    }
 }

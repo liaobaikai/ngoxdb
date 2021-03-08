@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.liaobaikai.ngoxdb.dao.master.MasterSQLServerMapper">
+<mapper namespace="com.liaobaikai.ngoxdb.core.dao.master.MasterSQLServerMapper">
 
     <!-- 表信息 -->
-    <select id="getTableInfo" resultType="com.liaobaikai.ngoxdb.info.TableInfo">
+    <select id="getTableInfo" resultType="com.liaobaikai.ngoxdb.bean.info.TableInfo">
         select
             s.name tableSchema,
             t.name tableName,
@@ -19,7 +19,7 @@
     </select>
 
     <!-- 列信息 -->
-    <select id="getTableColumnInfo" resultType="com.liaobaikai.ngoxdb.info.TableColumnInfo">
+    <select id="getTableColumnInfo" resultType="com.liaobaikai.ngoxdb.bean.info.TableColumnInfo">
         select
             s.name tableSchema,
             t.name tableName,
@@ -60,7 +60,7 @@
     </select>
 
     <!-- 表的索引信息 -->
-    <select id="getTableIndexInfo" resultType="com.liaobaikai.ngoxdb.info.TableIndexInfo">
+    <select id="getTableIndexInfo" resultType="com.liaobaikai.ngoxdb.bean.info.TableIndexInfo">
         select
             s.name schemaName,
             o.name tableName,
@@ -87,7 +87,7 @@
     <!-- 获取表的外键 -->
     <!-- type: https://docs.microsoft.com/zh-cn/sql/t-sql/functions/objectproperty-transact-sql?view=sql-server-ver15 -->
     <!-- CnstIsDeleteCascade, CnstIsUpdateCascade -->
-    <select id="getTableForeignKeyInfo" resultType="com.liaobaikai.ngoxdb.info.TableForeignKeyInfo">
+    <select id="getTableForeignKeyInfo" resultType="com.liaobaikai.ngoxdb.bean.info.TableForeignKeyInfo">
         select
             fk.name,
             s1.name schemaName,

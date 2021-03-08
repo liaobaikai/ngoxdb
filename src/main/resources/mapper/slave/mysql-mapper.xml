@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.liaobaikai.ngoxdb.dao.slave.SlaveMySQLMapper">
+<mapper namespace="com.liaobaikai.ngoxdb.core.dao.slave.SlaveMySQLMapper">
 
     <!-- 删除表 -->
     <update id="dropTable">
@@ -8,7 +8,7 @@
     </update>
 
     <!-- 创建表 -->
-    <update id="createTable" parameterType="com.liaobaikai.ngoxdb.info.TableInfo">
+    <update id="createTable" parameterType="com.liaobaikai.ngoxdb.bean.info.TableInfo">
         create table IF NOT EXISTS `${table.tableName}`
         (
         <!-- 列 -->

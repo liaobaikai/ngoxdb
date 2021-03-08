@@ -2,17 +2,17 @@
 <configuration>
 
 	<!-- 日志路径 -->
-<!--	<property name="LOG_PATH" value="./logs"/>-->
+	<property name="LOG_PATH" value="./logs"/>
 
 	<!-- 日志文件名称 -->
-<!--	<property name="LOG_FILE" value="${LOG_PATH}/ngoxDB.log" />-->
-<!--	<property name="LOG_FILE_ERROR" value="${LOG_PATH}/ngoxDB-error.log" />-->
+	<property name="LOG_FILE" value="${LOG_PATH}/ngoxdb.log" />
+	<property name="LOG_FILE_ERROR" value="${LOG_PATH}/ngoxdb-error.log" />
 
 	<!-- 日志文件允许记录的最大容量，默认为：10MB -->
-<!--	<property name="LOG_FILE_MAX_SIZE" value="10MB" />-->
+	<property name="LOG_FILE_MAX_SIZE" value="10MB" />
 
 	<!-- 日志文件的最长保存时间 -->
-<!--	<property name="LOG_FILE_MAX_HISTORY" value="180" />-->
+	<property name="LOG_FILE_MAX_HISTORY" value="180" />
 
 	<!-- 设置CONSOLE的日志输出格式 -->
 <!--	<property name="CONSOLE_LOG_PATTERN" value="%d{HH:mm:ss.SSS} [%thread] %-5level %logger{20} - [%method,%line] - %msg%n" />-->
@@ -20,7 +20,7 @@
 	<!-- 设置日志文件的日志输出格式 -->
 <!--	<property name="FILE_LOG_PATTERN" value="%d{HH:mm:ss.SSS} [%thread] %-5level %logger{20} - [%method,%line] - %msg%n" />-->
 
-<!--	<include resource="org/springframework/boot/logging/logback/base.xml" />-->
+	<include resource="org/springframework/boot/logging/logback/base.xml" />
 
 	<springProfile name="dev,test,debug">
 		<root level="INFO">

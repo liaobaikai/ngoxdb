@@ -1,9 +1,9 @@
 package com.liaobaikai.ngoxdb.boot;
 
-import com.alibaba.druid.pool.DruidDataSource;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import com.liaobaikai.ngoxdb.config.DatabaseConfig;
+import com.liaobaikai.ngoxdb.core.config.DatabaseConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.JdbcUtils;
@@ -23,7 +23,7 @@ import java.util.List;
 public class JdbcTemplate2 extends JdbcTemplate {
 
     // 控制台打印jdbc数据库操作信息
-    private boolean isDbConsoleLog = false;
+    private boolean isDbConsoleLog = true;
 
     private DatabaseConfig databaseConfig;
 
@@ -60,11 +60,12 @@ public class JdbcTemplate2 extends JdbcTemplate {
 
     /**
      * 查询返回对象列表
-     * @param sql SQL
+     *
+     * @param sql  SQL
      * @param args 参数
      * @return
      */
-    public <T> List<T> queryForList2(String sql, Class<T> clazz, Object... args){
+    public <T> List<T> queryForList2(String sql, Class<T> clazz, Object... args) {
         List<LinkedHashMap<String, Object>> queryResponse = this.query(sql, args);
         List<T> resultList = new ArrayList<>();
         queryResponse.forEach(rowMap -> resultList.add(JSON.toJavaObject((JSON) JSONObject.toJSON(rowMap), clazz)));
@@ -73,7 +74,8 @@ public class JdbcTemplate2 extends JdbcTemplate {
 
     /**
      * 查询
-     * @param sql SQL
+     *
+     * @param sql  SQL
      * @param args 参数
      * @return List<LinkedHashMap>
      */
@@ -141,47 +143,47 @@ public class JdbcTemplate2 extends JdbcTemplate {
     }
 
 
-    private void printConnectionInfo(){
-        if(this.isDbConsoleLog){
-            if(this.getDataSource() == null){
+    private void printConnectionInfo() {
+        if (this.isDbConsoleLog) {
+            if (this.getDataSource() == null) {
                 return;
             }
-            final DruidDataSource ds = (DruidDataSource) this.getDataSource();
+            final HikariDataSource ds = (HikariDataSource) this.getDataSource();
             int index;
-            if((index = this.databaseConfig.getUrl().indexOf("?")) != -1){
-                System.out.println("==> Connection: " + ds.getID() + ", " + ds.getName() + ", Database: " + this.databaseConfig.getUrl().substring(0, index));
+            if ((index = this.databaseConfig.getUrl().indexOf("?")) != -1) {
+                System.out.println("==> Connection: " + ds + ", Database: " + this.databaseConfig.getUrl().substring(0, index));
             } else {
-                System.out.println("==> Connection: " + ds.getID() + ", " + ds.getName() + ", Database: " + this.databaseConfig.getUrl());
+                System.out.println("==> Connection: " + ds + ", Database: " + this.databaseConfig.getUrl());
             }
 
         }
     }
 
-    private void printDaoInfo(){
-        if(this.isDbConsoleLog){
+    private void printDaoInfo() {
+        if (this.isDbConsoleLog) {
             StackTraceElement stackTraceElement = Thread.currentThread().getStackTrace()[5];
             System.out.println("==>   DaoClass: " + stackTraceElement.getClassName() + "." + stackTraceElement.getMethodName() + "() [LineNumber: " + stackTraceElement.getLineNumber());
         }
     }
 
 
-    private void printPreparingInfo(final String sql){
-        if(this.isDbConsoleLog) {
+    private void printPreparingInfo(final String sql) {
+        if (this.isDbConsoleLog) {
             System.out.println("==>  Preparing: " + sql.replaceAll("\n", " ").replaceAll(" +", " "));
         }
     }
 
-    private void printExecutingInfo(final String sql){
-        if(this.isDbConsoleLog){
+    private void printExecutingInfo(final String sql) {
+        if (this.isDbConsoleLog) {
             System.out.println("==>  Executing: " + sql.replaceAll("\n", " ").replaceAll(" +", " "));
         }
 
     }
 
 
-    private void printParameterInfo(Object[] args){
+    private void printParameterInfo(Object[] args) {
 
-        if(this.isDbConsoleLog){
+        if (this.isDbConsoleLog) {
             StringBuilder parameterBuilder = new StringBuilder();
             if (args != null) {
                 for (Object o : args) {
@@ -203,20 +205,20 @@ public class JdbcTemplate2 extends JdbcTemplate {
 
     }
 
-    private void printColumnInfo(String columnNames){
-        if(this.isDbConsoleLog) {
+    private void printColumnInfo(String columnNames) {
+        if (this.isDbConsoleLog) {
             System.out.println("<==    Columns: " + columnNames);
         }
     }
 
-    private void printRowInfo(String columnValues){
-        if(this.isDbConsoleLog) {
+    private void printRowInfo(String columnValues) {
+        if (this.isDbConsoleLog) {
             System.out.println("<==        Row: " + columnValues);
         }
     }
 
-    private void printTotalInfo(int total){
-        if(this.isDbConsoleLog){
+    private void printTotalInfo(int total) {
+        if (this.isDbConsoleLog) {
             System.out.println("<==      Total: " + total);
         }
 

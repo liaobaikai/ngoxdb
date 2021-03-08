@@ -10,11 +10,12 @@ public class PageUtils {
 
     /**
      * 获取页数
+     *
      * @param pageSize
      * @param total
      * @return
      */
-    public static int getPageCount(int pageSize, long total){
+    public static int getPageCount(int pageSize, long total) {
         return (int) (total / pageSize + ((total % pageSize == 0) ? 0 : 1));
     }
 

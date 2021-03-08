@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.liaobaikai.ngoxdb.dao.common.SlaveMetadataMapper">
+<mapper namespace="com.liaobaikai.ngoxdb.core.dao.common.SlaveMetadataMapper">
 
     <!-- 创建Ngox_master表，主要用于保存需要创建的索引，外键等信息 -->
     <update id="createTable">
@@ -15,7 +15,7 @@
     </update>
 
     <!-- 插入行 -->
-    <insert id="insertRow" parameterType="com.liaobaikai.ngoxdb.entity.SlaveMetaDataEntity">
+    <insert id="insertRow" parameterType="com.liaobaikai.ngoxdb.core.entity.SlaveMetaDataEntity">
         insert into ngoxdb_slave_metadata (table_schema, table_name, flags, statement, apply) values (#{tableSchema}, #{tableName}, #{flags}, #{statement}, 1)
     </insert>
 

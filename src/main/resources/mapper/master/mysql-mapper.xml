@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.liaobaikai.ngoxdb.dao.master.MasterMySQLMapper">
+<mapper namespace="com.liaobaikai.ngoxdb.core.dao.master.MasterMySQLMapper">
 
     <!-- 表信息 -->
-    <select id="getTableInfo" resultType="com.liaobaikai.ngoxdb.info.TableInfo">
+    <select id="getTableInfo" resultType="com.liaobaikai.ngoxdb.bean.info.TableInfo">
         select
             t.TABLE_SCHEMA,
             t.TABLE_NAME,
@@ -18,7 +18,7 @@
     </select>
 
     <!-- 列信息 -->
-    <select id="getTableColumnInfo" resultType="com.liaobaikai.ngoxdb.info.TableColumnInfo">
+    <select id="getTableColumnInfo" resultType="com.liaobaikai.ngoxdb.bean.info.TableColumnInfo">
         select
             c.TABLE_SCHEMA,
             c.TABLE_NAME,
@@ -51,7 +51,7 @@
     </select>
 
     <!-- 表的索引信息 -->
-    <select id="getTableIndexInfo" resultType="com.liaobaikai.ngoxdb.info.TableIndexInfo">
+    <select id="getTableIndexInfo" resultType="com.liaobaikai.ngoxdb.bean.info.TableIndexInfo">
         select
             isi.INDEX_ID,
             isi.NAME indexName,
@@ -76,7 +76,7 @@
     <!-- 获取表的外键 -->
     <!-- type: https://dev.mysql.com/doc/refman/5.6/en/information-schema-innodb-sys-foreign-table.html -->
     <!-- RESTRICT = NO ACTION = NULL -->
-    <select id="getTableForeignKeyInfo" resultType="com.liaobaikai.ngoxdb.info.TableForeignKeyInfo">
+    <select id="getTableForeignKeyInfo" resultType="com.liaobaikai.ngoxdb.bean.info.TableForeignKeyInfo">
         select
             substring(isf.ID, POSITION('/' in isf.REF_NAME) + 1) name,
             left(isf.FOR_NAME, POSITION('/' in isf.FOR_NAME) - 1) schemaName,

@@ -1,5 +1,10 @@
 package com.liaobaikai.ngoxdb.utils;
 
+import java.io.IOException;
+import java.io.Reader;
+import java.io.StringWriter;
+import java.sql.Clob;
+import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -7,7 +12,7 @@ import java.util.Map;
  * @author baikai.liao
  * @Time 2021-01-27 17:00:22
  */
-public class StringUtils extends org.apache.commons.lang3.StringUtils{
+public class StringUtils extends org.apache.commons.lang3.StringUtils {
 
     /**
      * 需要转义的特殊字符
@@ -16,6 +21,7 @@ public class StringUtils extends org.apache.commons.lang3.StringUtils{
 
     /**
      * url参数转map，如 name=baikai&age=28 => {name: baikai, age: 28}
+     *
      * @param urlParam 参数
      * @return map
      */
@@ -35,13 +41,14 @@ public class StringUtils extends org.apache.commons.lang3.StringUtils{
 
     /**
      * map转url参数 如 {name: baikai, age: 28} => name=baikai&age=28
+     *
      * @param map map
      * @return url参数
      */
-    public static String map2Url(Map<String, String> map){
+    public static String map2Url(Map<String, String> map) {
 
         StringBuilder urlParamBuilder = new StringBuilder();
-        if(map != null && map.size() > 0) {
+        if (map != null && map.size() > 0) {
             map.forEach((key, value) -> urlParamBuilder.append(key).append("=").append(value).append("&"));
             urlParamBuilder.delete(urlParamBuilder.length() - 1, urlParamBuilder.length());
         }
@@ -63,4 +70,37 @@ public class StringUtils extends org.apache.commons.lang3.StringUtils{
         }
         return regex;
     }
+
+    /**
+     * 将clob转换为字符串
+     *
+     * @param clob clob对象
+     * @return 字符串
+     * @throws SQLException sql错误
+     */
+    public static String clob2String(Clob clob) throws SQLException {
+        // Clob & NClob
+        Reader reader = clob.getCharacterStream();
+        StringBuilder stringBuilder = new StringBuilder();
+        char[] buf = new char[1024];
+        int readCount = 0;
+        while (true) {
+            try {
+                readCount = reader.read(buf);
+                if (readCount == -1) break;
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            stringBuilder.append(buf, 0, readCount);
+
+        }
+        return stringBuilder.toString();
+    }
+
+    public static boolean isStringValue(Class<?> inValueType) {
+        // Consider any CharSequence (including StringBuffer and StringBuilder) as a String.
+        return (CharSequence.class.isAssignableFrom(inValueType) ||
+                StringWriter.class.isAssignableFrom(inValueType));
+    }
+
 }
