@@ -1,10 +1,13 @@
 package com.liaobaikai.ngoxdb.bean.info;
 
+import com.liaobaikai.ngoxdb.bean.ColumnType;
 import com.liaobaikai.ngoxdb.bean.rs.Column;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.sql.DatabaseMetaData;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * @author baikai.liao
@@ -56,4 +59,14 @@ public class ColumnInfo extends Column {
         return YES.equalsIgnoreCase(getIsGeneratedColumn());
     }
 
+    /**
+     * 是否为无符号
+     */
+    private boolean isUnsigned;
+
+    /**
+     * 数据库厂家转换后的类型映射
+     * 数据库厂家 <-> 转换后的类型信息
+     */
+    private Map<String, ColumnType> mapOfColumnType = new HashMap<>();
 }

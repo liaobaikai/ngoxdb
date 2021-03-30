@@ -1,5 +1,6 @@
 package com.liaobaikai.ngoxdb.core.config;
 
+import com.liaobaikai.ngoxdb.anno.Description;
 import com.liaobaikai.ngoxdb.core.enums.DatabaseVendorEnum;
 import com.liaobaikai.ngoxdb.utils.StringUtils;
 import lombok.Getter;
@@ -10,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 数据库连接信息
@@ -47,123 +49,146 @@ public class DatabaseConfig {
         }
     };
 
+    // access database默认参数
+    private static final LinkedHashMap<String, String> ACCESS_DEFAULT_PARAMS = new LinkedHashMap<String, String>() {
+        {
+            put("sysSchema", "true");
+            put("ignoreCase", "true");
+            put("newDatabaseVersion", "V2003");
+        }
+    };
+
     /**
      * 配置标识
      */
+    @Description(name = "name", label = "配置标识", defaultValue = "slave|master")
     private String name;
 
     /**
      * 数据库厂家 {@link com.liaobaikai.ngoxdb.core.enums.DatabaseVendorEnum}
      */
+    @Description(name = "database", label = "数据库厂家")
     private String database;
 
     /**
      * 主机
      */
+    @Description(name = "host", label = "主机名")
     private String host;
 
     /**
      * 端口
      */
+    @Description(name = "port", label = "端口")
     private String port;
 
     /**
      * 数据库名
      */
+    @Description(name = "database-name", label = "数据库名")
     private String databaseName;
 
     /**
      * 驱动类
      */
+    @Description(name = "driver-class-name", label = "驱动类")
     private String driverClassName;
 
     /**
      * 用户名
      */
+    @Description(name = "username", label = "用户名")
     private String username;
 
     /**
      * 密码
      */
+    @Description(name = "password", label = "密码")
     private String password;
 
     /**
      * 其他参数信息
      */
+    @Description(name = "params", label = "其他参数信息")
     private String params;
 
     /**
      * 本地文件
      */
+    @Description(name = "local-file", label = "本地文件", applyOn = {DatabaseVendorEnum.MICROSOFT_ACCESS, DatabaseVendorEnum.SQLITE})
     private String localFile;
 
     /**
      * 生成的数据库版本
      */
+    @Description(name = "new-database-version", label = "生成的数据库版本", defaultValue = "V2007", applyOn = {DatabaseVendorEnum.MICROSOFT_ACCESS})
     private String newDatabaseVersion = "V2007";
 
     /**
      * jdbc url
      */
+    @Description(name = "jdbc-url", label = "jdbc url", defaultValue = "根据其他配置参数自动生成")
     private String jdbcUrl;
 
     /**
      * 表存在是否替换
      */
+    @Description(name = "replace-table", label = "表存在时是否替换(false: 跳过, true: 替换)?", defaultValue = "false")
     private boolean replaceTable;
 
     /**
      * 表数据存在是否截断
      */
+    @Description(name = "truncate-table", label = "表数据存在时是否截断(false: 跳过, true: 替换)?", defaultValue = "false")
     private boolean truncateTable;
 
     /**
      * 创建表的参数
      */
+    @Description(name = "create-table-params", label = "创建表的参数")
     private String createTableParams;
-
-    /**
-     * 如果表没有主键的话，且改列是自动增长的话，需要将该列设置为主键列
-     * 默认为false
-     */
-    private boolean primaryKeyWithAutoincrementColumns;
 
     /**
      * 协议
      */
+    @Description(name = "protocol", label = "协议: tcp, tcps...等等", applyOn = {DatabaseVendorEnum.ORACLE})
     private String protocol;
 
     /**
      * 多个 host1[,host2,host3][:port1][,host4:port2]
      */
+    @Description(name = "servers", label = "多个主机名，如: host1[,host2,host3][:port1][,host4:port2]", applyOn = {DatabaseVendorEnum.ORACLE})
     private String servers;
-
-    /**
-     * 目标的名称转换为小写
-     */
-    private boolean lowerCaseName;
 
     /**
      * 自动生成名称，主要针对 索引，约束，外键等。
      */
+    @Description(name = "generate-name", label = "自动生成名称，主要针对索引(false: 默认, true: 自动生成)。", defaultValue = "false")
     private boolean generateName;
 
     /**
-     * 数据库操作控制台日志
+     * 每页大小，默认256
      */
-    private boolean dbConsoleLog;
-
-    /**
-     * 每页大小，默认1000
-     */
+    @Description(name = "page-size", label = "批量导出导入的数量", defaultValue = "256")
     private int pageSize = 256;
 
     /**
-     * 是否批量插入
+     * 需要处理的表名，用逗号隔开
      */
-    private boolean batchInsert = true;
+    @Description(name = "tables", label = "需要处理的表名，用逗号隔开")
+    private String tables;
 
+    /**
+     * 重新映射表名，如：a:a1,b:b2
+     */
+    @Description(name = "remap-table", label = "重新映射表名，如：a:a1,b:b2")
+    private String remapTable = "";
 
+    /**
+     * 获取驱动类名
+     *
+     * @return
+     */
     public String getDriverClassName() {
 
         // 判断数据库是否存在
@@ -216,9 +241,11 @@ public class DatabaseConfig {
             // http://ucanaccess.sourceforge.net/site.html#examples
             urlBuilder.append("ucanaccess://").append(this.localFile);
             if (StringUtils.isNotEmpty(this.newDatabaseVersion)) {
-                urlBuilder.append(";newDatabaseVersion=").append(this.newDatabaseVersion);
+                ACCESS_DEFAULT_PARAMS.put("newDatabaseVersion", this.newDatabaseVersion);
             }
-            urlBuilder.append(";sysSchema=true;ignoreCase=true");
+            for (Map.Entry<String, String> en : ACCESS_DEFAULT_PARAMS.entrySet()) {
+                urlBuilder.append(";").append(en.getKey()).append("=").append(en.getValue());
+            }
             return urlBuilder.toString();
         } else if (DatabaseVendorEnum.MYSQL.getDriverClassName().equals(driverClassName)
                 || DatabaseVendorEnum.MARIADB.getDriverClassName().equals(driverClassName)) {
@@ -250,13 +277,19 @@ public class DatabaseConfig {
                 this.port = Integer.valueOf(DatabaseVendorEnum.ORACLE.getDefaultPort()).toString();
             }
             // service name
-
             urlBuilder.append(this.database).append(":thin:@");
             if (StringUtils.isNotEmpty(this.protocol)) {
                 urlBuilder.append(this.protocol).append("://");
             } else {
                 urlBuilder.append("//");
             }
+
+        } else if (DatabaseVendorEnum.DM.getDriverClassName().equals(driverClassName)) {
+            // 达梦数据库
+            if (StringUtils.isEmpty(this.port)) {
+                this.port = Integer.valueOf(DatabaseVendorEnum.DM.getDefaultPort()).toString();
+            }
+            urlBuilder.append(this.database).append("://");
 
         } else if (DatabaseVendorEnum.DB2.getDriverClassName().equals(driverClassName)) {
             if (StringUtils.isEmpty(this.port)) {
@@ -304,4 +337,5 @@ public class DatabaseConfig {
                 && StringUtils.isNotEmpty(this.driverClassName) && StringUtils.isNotEmpty(this.username)
                 && StringUtils.isNotEmpty(this.password));
     }
+
 }

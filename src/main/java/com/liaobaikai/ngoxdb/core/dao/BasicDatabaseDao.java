@@ -2,28 +2,31 @@ package com.liaobaikai.ngoxdb.core.dao;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
+import com.liaobaikai.ngoxdb.bean.NgoxDbMaster;
+import com.liaobaikai.ngoxdb.bean.PreparedPagination;
 import com.liaobaikai.ngoxdb.bean.info.ColumnInfo;
 import com.liaobaikai.ngoxdb.bean.info.DatabaseInfo;
 import com.liaobaikai.ngoxdb.bean.info.IndexInfo2;
 import com.liaobaikai.ngoxdb.bean.info.TableInfo;
 import com.liaobaikai.ngoxdb.bean.rs.*;
-import com.liaobaikai.ngoxdb.boot.JdbcTemplate2;
-import com.liaobaikai.ngoxdb.core.entity.SlaveMetaDataEntity;
+import com.liaobaikai.ngoxdb.boot.JdbcTemplate;
+import com.liaobaikai.ngoxdb.core.constant.JdbcDataType;
+import com.liaobaikai.ngoxdb.core.dialect.DatabaseDialect;
+import com.liaobaikai.ngoxdb.core.entity.NgoxDbRelayLog;
+import com.liaobaikai.ngoxdb.utils.CommonUtils;
 import com.liaobaikai.ngoxdb.utils.NumberUtils;
 import org.apache.commons.lang3.ArrayUtils;
-import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.support.JdbcUtils;
 import org.springframework.lang.NonNull;
-import org.springframework.lang.Nullable;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -34,35 +37,23 @@ import java.util.UUID;
  */
 public abstract class BasicDatabaseDao implements DatabaseDao {
 
-    private final JdbcTemplate2 jdbcTemplate;
-    private final String catalog;
-    private int maxColumnNameLength = 0;
-    private int maxStatementLength = 0;
-    private boolean doesMaxRowSizeIncludeBlobs;
+    private final NgoxDbMaster ngoxDbMaster;
+    private final int maxIdentifierLength;
 
-    public BasicDatabaseDao(JdbcTemplate2 jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
-        this.catalog = jdbcTemplate.execute(new ConnectionCallback<String>() {
-            @Nullable
-            @Override
-            public String doInConnection(@NonNull Connection con) throws SQLException, DataAccessException {
-                DatabaseMetaData metaData = con.getMetaData();
-                maxColumnNameLength = metaData.getMaxColumnNameLength();
-                maxStatementLength = metaData.getMaxStatementLength();
-                doesMaxRowSizeIncludeBlobs = metaData.doesMaxRowSizeIncludeBlobs();
-                return con.getCatalog();
-            }
-        });
+    public BasicDatabaseDao(@NonNull NgoxDbMaster ngoxDbMaster) {
+        this.ngoxDbMaster = ngoxDbMaster;
+        Integer maxLength = getJdbcTemplate().execute((ConnectionCallback<Integer>) con -> con.getMetaData().getMaxColumnNameLength());
+        this.maxIdentifierLength = maxLength == null ? 0 : maxLength;
     }
 
     @Override
-    public String getCatalog() {
-        return this.catalog;
+    public DatabaseDialect getDatabaseDialect() {
+        return this.ngoxDbMaster.getDatabaseDialect();
     }
 
     @Override
-    public JdbcTemplate2 getJdbcTemplate() {
-        return this.jdbcTemplate;
+    public NgoxDbMaster getNgoxDbMaster() {
+        return this.ngoxDbMaster;
     }
 
     /**
@@ -71,18 +62,24 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
     protected abstract DatabaseInfo initDatabaseInfo();
 
     @Override
-    public int getMaxColumnNameLength() {
-        return this.maxColumnNameLength;
+    public int getMaxIdentifierLength() {
+        return this.maxIdentifierLength;
     }
 
     @Override
-    public int getMaxStatementLength() {
-        return this.maxStatementLength;
+    public JdbcTemplate getJdbcTemplate() {
+        return this.ngoxDbMaster.getJdbcTemplate();
     }
 
-    @Override
-    public boolean doesMaxRowSizeIncludeBlobs() {
-        return this.doesMaxRowSizeIncludeBlobs;
+    private String postName(String name) {
+        if (name != null) {
+            if (getDatabaseDialect().defaultUpperCaseName()) {
+                return name.toUpperCase();
+            } else if (getDatabaseDialect().defaultLowerCaseName()) {
+                return name.toLowerCase();
+            }
+        }
+        return name;
     }
 
     /**
@@ -94,56 +91,56 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
     @Override
     public List<TableInfo> getTables(String... tableName) {
 
-        getLogger().info("正在读取表信息...");
-
-        return this.jdbcTemplate.execute((ConnectionCallback<List<TableInfo>>) conn -> {
-            DatabaseMetaData metaData = conn.getMetaData();
+        return this.getJdbcTemplate().execute((ConnectionCallback<List<TableInfo>>) con -> {
+            DatabaseMetaData metaData = con.getMetaData();
             List<TableInfo> tableList = new ArrayList<>();
 
             if (tableName.length == 0) {
-                getTable(metaData, tableList, "%");
+                getTable(con, metaData, tableList, "%");
             } else {
                 for (String name : tableName) {
-                    getTable(metaData, tableList, name);
+                    getTable(con, metaData, tableList, postName(name));
                 }
             }
 
             if (tableList.size() == 0) {
-                getLogger().info("Master, Query table name: {}, total: 0", JSONObject.toJSONString(tableName));
+                getLogger().info("Query table name: {}, total: 0",
+                        JSONObject.toJSONString(tableName));
             } else {
                 StringBuilder stringBuilder = new StringBuilder();
                 for (TableInfo tableInfo : tableList) {
                     stringBuilder.append(tableInfo.getTableName()).append(", ");
                 }
                 stringBuilder.delete(stringBuilder.length() - 2, stringBuilder.length());
-                getLogger().info("Query table name: {}, Total: {}, Table list: {}", JSONObject.toJSONString(tableName), tableList.size(), stringBuilder.toString());
+                getLogger().info("Query table name: {}, Total: {}, Table list: {}",
+                        JSONObject.toJSONString(tableName),
+                        tableList.size(),
+                        stringBuilder.toString());
             }
 
             return tableList;
         });
     }
 
-    private void getTable(DatabaseMetaData metaData, List<TableInfo> tableList, String table) throws SQLException {
-        ResultSet rs = metaData.getTables(this.getCatalog(), this.getSchemaPattern(), table, new String[]{"TABLE"});
+    private void getTable(Connection con, DatabaseMetaData metaData, List<TableInfo> tableList, String table) throws SQLException {
+        ResultSet rs = metaData.getTables(con.getCatalog(), con.getSchema(), table, new String[]{"TABLE"});
         while (rs.next()) {
-            TableInfo tableInfo = JSON.toJavaObject(getJsonObject(rs), TableInfo.class);
-            tableInfo.setDatabaseVendorName(this.jdbcTemplate.getDatabaseConfig().getDatabase());
-            tableList.add(tableInfo);
+            tableList.add(JSON.toJavaObject(getJsonObject(rs), TableInfo.class));
         }
     }
 
     @Override
     public List<ColumnInfo> getColumns(String... tableName) {
 
-        return this.jdbcTemplate.execute((ConnectionCallback<List<ColumnInfo>>) conn -> {
-            DatabaseMetaData metaData = conn.getMetaData();
+        return this.getJdbcTemplate().execute((ConnectionCallback<List<ColumnInfo>>) con -> {
+            DatabaseMetaData metaData = con.getMetaData();
             List<ColumnInfo> columnList = new ArrayList<>();
 
             if (tableName.length == 0) {
-                getColumn(metaData, columnList, "%");
+                getColumn(con, metaData, columnList, "%");
             } else {
                 for (String name : tableName) {
-                    getColumn(metaData, columnList, name);
+                    getColumn(con, metaData, columnList, postName(name));
                 }
             }
 
@@ -151,8 +148,8 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
         });
     }
 
-    private void getColumn(DatabaseMetaData metaData, List<ColumnInfo> columnList, String name) throws SQLException {
-        try (ResultSet rs = metaData.getColumns(this.getCatalog(), this.getSchemaPattern(), name, "%")) {
+    private void getColumn(Connection con, DatabaseMetaData metaData, List<ColumnInfo> columnList, String name) throws SQLException {
+        try (ResultSet rs = metaData.getColumns(con.getCatalog(), con.getSchema(), name, "%")) {
             while (rs.next()) {
                 columnList.add(JSON.toJavaObject(getJsonObject(rs), ColumnInfo.class));
             }
@@ -170,12 +167,12 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
 
 
     @Override
-    public List<PrimaryKey> getPrimaryKeys(String schema, String tableName) {
-        return this.jdbcTemplate.execute((ConnectionCallback<List<PrimaryKey>>) conn -> {
+    public List<PrimaryKey> getPrimaryKeys(String tableName) {
+        return this.getJdbcTemplate().execute((ConnectionCallback<List<PrimaryKey>>) conn -> {
             DatabaseMetaData metaData = conn.getMetaData();
             List<PrimaryKey> resultList = new ArrayList<>();
 
-            try (ResultSet rs = metaData.getPrimaryKeys(this.getCatalog(), schema, tableName)) {
+            try (ResultSet rs = metaData.getPrimaryKeys(conn.getCatalog(), conn.getSchema(), postName(tableName))) {
                 while (rs.next()) {
                     resultList.add(JSON.toJavaObject(getJsonObject(rs), PrimaryKey.class));
                 }
@@ -186,12 +183,13 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
     }
 
     @Override
-    public List<ImportedKey> getImportedKeys(String schema, String tableName) {
-        return this.jdbcTemplate.execute((ConnectionCallback<List<ImportedKey>>) conn -> {
+    public List<ImportedKey> getImportedKeys(String tableName) {
+
+        return this.getJdbcTemplate().execute((ConnectionCallback<List<ImportedKey>>) conn -> {
             DatabaseMetaData metaData = conn.getMetaData();
             List<ImportedKey> resultList = new ArrayList<>();
 
-            try (ResultSet rs = metaData.getImportedKeys(this.getCatalog(), schema, tableName)) {
+            try (ResultSet rs = metaData.getImportedKeys(conn.getCatalog(), conn.getSchema(), postName(tableName))) {
                 while (rs.next()) {
                     resultList.add(JSON.toJavaObject(getJsonObject(rs), ImportedKey.class));
                 }
@@ -202,12 +200,13 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
     }
 
     @Override
-    public List<ExportedKey> getExportedKeys(String schema, String tableName) {
-        return this.jdbcTemplate.execute((ConnectionCallback<List<ExportedKey>>) conn -> {
-            DatabaseMetaData metaData = conn.getMetaData();
+    public List<ExportedKey> getExportedKeys(String tableName) {
+
+        return this.getJdbcTemplate().execute((ConnectionCallback<List<ExportedKey>>) con -> {
+            DatabaseMetaData metaData = con.getMetaData();
             List<ExportedKey> resultList = new ArrayList<>();
 
-            try (ResultSet rs = metaData.getExportedKeys(this.getCatalog(), schema, tableName)) {
+            try (ResultSet rs = metaData.getExportedKeys(con.getCatalog(), con.getSchema(), postName(tableName))) {
                 while (rs.next()) {
                     resultList.add(JSON.toJavaObject(getJsonObject(rs), ExportedKey.class));
                 }
@@ -219,13 +218,13 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
 
 
     @Override
-    public List<VersionColumn> getVersionColumns(String schema, String tableName) {
+    public List<VersionColumn> getVersionColumns(String tableName) {
 
-        return this.jdbcTemplate.execute((ConnectionCallback<List<VersionColumn>>) conn -> {
-            DatabaseMetaData metaData = conn.getMetaData();
+        return this.getJdbcTemplate().execute((ConnectionCallback<List<VersionColumn>>) con -> {
+            DatabaseMetaData metaData = con.getMetaData();
             List<VersionColumn> resultList = new ArrayList<>();
 
-            try (ResultSet rs = metaData.getVersionColumns(this.getCatalog(), schema, tableName)) {
+            try (ResultSet rs = metaData.getVersionColumns(con.getCatalog(), con.getSchema(), postName(tableName))) {
                 while (rs.next()) {
                     resultList.add(JSON.toJavaObject(getJsonObject(rs), VersionColumn.class));
                 }
@@ -239,15 +238,15 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
     @Override
     public List<Attribute> getAttributes(String... typeName) {
 
-        return this.jdbcTemplate.execute((ConnectionCallback<List<Attribute>>) conn -> {
-            DatabaseMetaData metaData = conn.getMetaData();
+        return this.getJdbcTemplate().execute((ConnectionCallback<List<Attribute>>) con -> {
+            DatabaseMetaData metaData = con.getMetaData();
             List<Attribute> resultList = new ArrayList<>();
 
             if (typeName.length == 0) {
-                getType(metaData, resultList, "%");
+                getType(con, metaData, resultList, "%");
             } else {
                 for (String name : typeName) {
-                    getType(metaData, resultList, name);
+                    getType(con, metaData, resultList, postName(name));
                 }
             }
 
@@ -255,8 +254,8 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
         });
     }
 
-    private void getType(DatabaseMetaData metaData, List<Attribute> resultList, String name) throws SQLException {
-        try (ResultSet rs = metaData.getAttributes(this.getCatalog(), this.getSchemaPattern(), name, "%")) {
+    private void getType(Connection con, DatabaseMetaData metaData, List<Attribute> resultList, String name) throws SQLException {
+        try (ResultSet rs = metaData.getAttributes(con.getCatalog(), con.getSchema(), name, "%")) {
             while (rs.next()) {
                 resultList.add(JSON.toJavaObject(getJsonObject(rs), Attribute.class));
             }
@@ -264,13 +263,13 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
     }
 
     @Override
-    public List<IndexInfo2> getIndexInfo(String schema, String tableName) {
+    public List<IndexInfo2> getIndexInfo(String tableName) {
 
-        List<IndexInfo2> indexInfoList = this.jdbcTemplate.execute((ConnectionCallback<List<IndexInfo2>>) conn -> {
-            DatabaseMetaData metaData = conn.getMetaData();
+        List<IndexInfo2> indexInfoList = this.getJdbcTemplate().execute((ConnectionCallback<List<IndexInfo2>>) con -> {
+            DatabaseMetaData metaData = con.getMetaData();
             List<IndexInfo2> resultList = new ArrayList<>();
 
-            try (ResultSet rs = metaData.getIndexInfo(this.getCatalog(), schema, tableName, false, false)) {
+            try (ResultSet rs = metaData.getIndexInfo(con.getCatalog(), con.getSchema(), postName(tableName), false, false)) {
                 while (rs.next()) {
                     resultList.add(JSON.toJavaObject(getJsonObject(rs), IndexInfo2.class));
                 }
@@ -299,15 +298,17 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
      * @return 数量
      */
     @Override
-    public int getTableCount(String schema, String tableName) {
+    public int getTableCount(String tableName) {
 
-        Integer tableCount = this.jdbcTemplate.execute((ConnectionCallback<Integer>) conn -> {
+        Integer tableCount = this.getJdbcTemplate().execute((ConnectionCallback<Integer>) conn -> {
             DatabaseMetaData metaData = conn.getMetaData();
             int count = 0;
-
-            try (ResultSet rs = metaData.getTables(conn.getCatalog(), schema, tableName, new String[]{"TABLE"})) {
+            try (ResultSet rs = metaData.getTables(conn.getCatalog(), conn.getSchema(), null, new String[]{"TABLE"})) {
                 while (rs.next()) {
-                    count++;
+                    if (rs.getString("TABLE_NAME").equalsIgnoreCase(tableName)) {
+                        count++;
+                        break;
+                    }
                 }
             }
 
@@ -318,6 +319,10 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
         return tableCount == null ? 0 : tableCount;
     }
 
+    @Override
+    public boolean existsTable(String tableName) {
+        return this.getTableCount(tableName) > 0;
+    }
 
     /**
      * 获取表的行的数量
@@ -326,26 +331,42 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
      * @return 数量
      */
     @Override
-    public long getTableRowCount(String schema, String tableName) {
-        List<LinkedHashMap<String, Object>> queryResponse = this.jdbcTemplate.query("SELECT COUNT(*) COUNT FROM " + tableName);
-        LinkedHashMap<String, Object> map = queryResponse.get(0);
-        Object value = map.get("COUNT");
-        return NumberUtils.toLong(value == null ? map.get("count") : value);
+    public long getTableRowCount(String tableName) {
+        List<Map<String, Object>> queryResponse =
+                this.getJdbcTemplate().queryForList(String.format("select count(0) from %s", this.getDatabaseDialect().toLookupName(tableName)));
+        Map<String, Object> map = queryResponse.get(0);
+        Object value = CommonUtils.getFirstValue(map);
+        return NumberUtils.toLong(value == null ? 0 : value);
     }
 
-    /**
-     * 删除表
-     *
-     * @param tableName 表名
-     */
     @Override
     public void dropTable(String tableName) {
-        this.jdbcTemplate.execute("DROP TABLE " + tableName);
+        if (this.existsTable(tableName)) {
+            String stmt = this.getDatabaseDialect().getDropTableString(tableName);
+            this.execute(stmt);
+            getLogger().info("[{}] {}", this.getNgoxDbMaster().getDatabaseConfig().getName(), stmt);
+        }
+    }
+
+    @Override
+    public void dropForeignKey(String tableName) {
+        // 获取是否存在外键
+        List<ImportedKey> importedKeys = this.getImportedKeys(tableName);
+
+        // 删除表的外键约束语句
+        for (ImportedKey importedKey : importedKeys) {
+            String stmt = String.format("alter table %s %s %s",
+                    this.getDatabaseDialect().toLookupName(importedKey.getFkTableName()),
+                    this.getDatabaseDialect().getDropForeignKeyString(),
+                    this.getDatabaseDialect().toLookupName(importedKey.getFkName()));
+            getLogger().info("Table {} exists foreign key, {}", this.getDatabaseDialect().toLookupName(tableName), stmt);
+            this.execute(stmt);
+        }
     }
 
     @Override
     public void deleteTable(String tableName) {
-        this.jdbcTemplate.execute("DELETE FROM " + tableName);
+        this.execute("delete from " + this.getDatabaseDialect().toLookupName(tableName));
     }
 
     /**
@@ -355,87 +376,92 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
      */
     @Override
     public void truncateTable(String tableName) {
-        this.jdbcTemplate.execute("TRUNCATE TABLE " + tableName);
+        if (!this.getDatabaseDialect().supportsTruncateTable()) {
+            return;
+        }
+        this.execute("truncate table " + this.getDatabaseDialect().toLookupName(tableName));
     }
 
     /**
      * 创建表
-     *
-     * @param tableName 表名
      */
     @Override
-    public void createMetadataTable(String tableName) {
-        String sqlBuilder = "CREATE TABLE " + tableName + "( " +
-                "metadata_id    varchar(" + UUID.randomUUID().toString().length() + ") unique," +
-                "table_name     varchar(128)," +
-                "type           varchar(32)," +
-                "statement      varchar(1000)," +
-                "is_used        int" +
-                ")";
-        this.jdbcTemplate.execute(sqlBuilder);
+    public void createLogTable() {
+        String sqlBuilder = String.format("create table %s ( " +
+                        "log_id varchar(%s) unique," +
+                        "log_table_name varchar(128)," +
+                        "log_type varchar(32)," +
+                        "log_text %s," +
+                        "log_used int)",
+                postName(NgoxDbRelayLog.TABLE_NAME),
+                UUID.randomUUID().toString().length(),
+                this.getDatabaseDialect().getDataTypeMap().get(JdbcDataType.LONGVARCHAR));
+
+        this.getJdbcTemplate().execute(sqlBuilder);
     }
 
     /**
      * 更新元数据
      *
      * @param entity 实体
-     * @return 1 成功；0 失败
      */
     @Override
-    public int updateMetadata(SlaveMetaDataEntity entity) {
-        String sqlBuilder = "UPDATE " + SlaveMetaDataEntity.TABLE_NAME +
-                " SET is_used = ? where metadata_id = ?";
-        return this.jdbcTemplate.update(sqlBuilder, entity.getIsUsed(), entity.getMetadataId());
+    public void updateLogRows(NgoxDbRelayLog entity) {
+        String sqlBuilder = String.format("update %s set log_used = ? where log_id = ?", postName(NgoxDbRelayLog.TABLE_NAME));
+        this.getJdbcTemplate().update(sqlBuilder, entity.getLogUsed(), entity.getLogId());
     }
 
     /**
      * 插入源数据
      *
      * @param entity 实体
-     * @return 1 成功；0 失败
      */
     @Override
-    public int insertMetadata(SlaveMetaDataEntity entity) {
-        String sqlBuilder = "INSERT INTO " + SlaveMetaDataEntity.TABLE_NAME +
-                " (metadata_id, table_name, type, statement, is_used) VALUES (?, ?, ?, ?, ?)";
-        return this.jdbcTemplate.update(sqlBuilder,
-                entity.getMetadataId(), entity.getTableName(), entity.getType(), entity.getStatement(), entity.getIsUsed());
+    public void insertLogRows(NgoxDbRelayLog entity) {
+        String sqlBuilder = String.format("INSERT INTO %s (log_id, log_table_name, log_type, log_text, log_used) VALUES (?, ?, ?, ?, ?)", postName(NgoxDbRelayLog.TABLE_NAME));
+        this.getJdbcTemplate().update(sqlBuilder,
+                entity.getLogId(), entity.getLogTableName(), entity.getLogType(), entity.getLogText(), entity.getLogUsed());
     }
 
     /**
      * 删除源数据
      *
      * @param tableName 表名
-     * @return 1 成功；0 失败
      */
     @Override
-    public int deleteMetadata(String tableName) {
-        String sqlBuilder = "DELETE FROM " + SlaveMetaDataEntity.TABLE_NAME + " WHERE table_name = ?";
-        return this.jdbcTemplate.update(sqlBuilder, tableName);
+    public void deleteLogRows(String tableName) {
+        String sqlBuilder = String.format("delete from %s where log_table_name = ?", postName(NgoxDbRelayLog.TABLE_NAME));
+        this.getJdbcTemplate().update(sqlBuilder, tableName);
     }
 
     @Override
-    public List<SlaveMetaDataEntity> getSlaveMetadataList(Integer isUsed, String... tableNames) {
+    public void dropLogTable() {
+        this.getJdbcTemplate().execute(getDatabaseDialect().getDropTableString(postName(NgoxDbRelayLog.TABLE_NAME)));
+    }
 
-        StringBuilder sBuilder = new StringBuilder("SELECT * FROM " + SlaveMetaDataEntity.TABLE_NAME);
-        sBuilder.append(" WHERE ");
+    @Override
+    public List<NgoxDbRelayLog> getLogRows(Integer isUsed, String... tableNames) {
+
+        StringBuilder sBuilder = new StringBuilder();
+        sBuilder.append("select * from ").append(postName(NgoxDbRelayLog.TABLE_NAME)).append(" where ");
+
         Object[] params = new Object[tableNames.length + 1];
         int i = 0;
         if (tableNames.length > 0) {
-            sBuilder.append("TABLE_NAME IN(");
+            sBuilder.append("log_table_name in ( ");
 
             for (String tableName : tableNames) {
                 sBuilder.append("?,");
                 tableNames[i] = tableName;
                 i++;
             }
-            sBuilder.delete(sBuilder.length() - 1, sBuilder.length()).append(") AND");
+            sBuilder.delete(sBuilder.length() - 1, sBuilder.length()).append(") and");
         }
         params[i] = isUsed;
 
-        sBuilder.append(" is_used = ?");
+        sBuilder.append(" log_used = ?");
 
-        return this.jdbcTemplate.queryForList2(sBuilder.toString(), SlaveMetaDataEntity.class, params);
+        return this.getJdbcTemplate().queryForList(sBuilder.toString(), NgoxDbRelayLog.class, params);
     }
 
     /**
@@ -507,5 +533,107 @@ public abstract class BasicDatabaseDao implements DatabaseDao {
         }
 
         return defaultValue;
+    }
+
+    @Override
+    public List<Object[]> pagination(String tableName,
+                                     String[] queryColumnNames,
+                                     String[] orderColumnNames,
+                                     boolean isPrimaryKeyOrder,
+                                     int offset,
+                                     int limit) {
+
+        PreparedPagination preparedPagination =
+                this.getDatabaseDialect().getPreparedPagination(tableName, queryColumnNames, orderColumnNames, isPrimaryKeyOrder, offset, limit);
+
+        // this.getLogger().info("[{}] {}; limit={}, offset={}", this.getJdbcTemplate().getDatabaseConfig().getName(), preparedPagination.getPreparedSql(),
+        //         limit, offset);
+
+        return this.query(preparedPagination.getPreparedSql(), preparedPagination.getParamValues());
+    }
+
+    @Override
+    public List<Object[]> query(String sql, Object[] paramValues) {
+        // 查询某一页的所有的数据
+        // return this.getJdbcTemplate().execute((ConnectionCallback<List<Object[]>>) con -> {
+        //     List<Object[]> rowArgs = new ArrayList<>();
+        //     try(PreparedStatement ps = con.prepareStatement(sql)) {
+        //
+        //         for(int x = 0, len = paramValues.length; x < len; x++){
+        //             ps.setObject(x + 1, paramValues[x]);
+        //         }
+        //
+        //         try(ResultSet rs = ps.executeQuery()) {
+        //             while (rs.next()){
+        //                 ResultSetMetaData metaData = rs.getMetaData();
+        //                 Object[] values = new Object[metaData.getColumnCount()];
+        //                 for (int i = 0, len = values.length; i < len; i++) {
+        //                     // 源数据库处理为通用类型
+        //                     Object value = rs.getObject(i + 1);
+        //                     if (value instanceof Clob) {
+        //                         // clob & nclob
+        //                         try {
+        //                             values[i] = StringUtils.clob2String((Clob) value);
+        //                         } catch (SQLException e) {
+        //                             e.printStackTrace();
+        //                         }
+        //                         continue;
+        //                     }
+        //                     // 转换为通用的类型
+        //                     values[i] = getDatabaseDialect().getSqlGenericType(value);
+        //                 }
+        //                 rowArgs.add(values);
+        //             }
+        //         }
+        //     }
+        //     return rowArgs;
+        // });
+
+        // this.getLogger().info("sql: {}, paramValues: {}", sql, JSONObject.toJSONString(paramValues));
+
+        // return this.getJdbcTemplate().execute(sql, (PreparedStatementCallback<List<Object[]>>) ps -> {
+        //     List<Object[]> rsp = new ArrayList<>();
+        //     try (Connection con = ps.getConnection()){
+        //         ps
+        //         ps.execute();
+        //     }
+        //     return rsp;
+        // });
+
+        return this.getJdbcTemplate().query(sql, paramValues, (rs, rowNum) -> {
+            Object[] values = new Object[rs.getMetaData().getColumnCount()];
+            for (int i = 0, len = values.length; i < len; i++) {
+                // 源数据库处理为通用类型
+                // Object value = rs.getObject(i + 1);
+                // if (value instanceof Clob) {
+                //     // clob & nclob
+                //     try {
+                //         values[i] = StringUtils.clob2String((Clob) value);
+                //     } catch (SQLException e) {
+                //         e.printStackTrace();
+                //     }
+                //     continue;
+                // }
+                // 转换为通用的类型
+                // values[i] = this.getDatabaseDialect().getSqlGenericType(value);
+                values[i] = rs.getObject(i + 1);
+            }
+            return values;
+        });
+    }
+
+    @Override
+    public List<Object[]> query(String sql, Map<String, Object[]> condition) {
+        return null;
+    }
+
+    @Override
+    public void execute(String stmt) {
+        this.getJdbcTemplate().execute(stmt);
+    }
+
+    @Override
+    public void batchUpdate(String stmt, List<Object[]> batchArgs) {
+        this.getJdbcTemplate().batchUpdate(stmt, batchArgs);
     }
 }

@@ -1,12 +1,10 @@
 package com.liaobaikai.ngoxdb.core.dao.impl;
 
+import com.liaobaikai.ngoxdb.bean.NgoxDbMaster;
 import com.liaobaikai.ngoxdb.bean.info.ColumnInfo;
 import com.liaobaikai.ngoxdb.bean.info.ConstraintInfo;
 import com.liaobaikai.ngoxdb.bean.info.DatabaseInfo;
 import com.liaobaikai.ngoxdb.bean.info.IndexInfo2;
-import com.liaobaikai.ngoxdb.bean.rs.ExportedKey;
-import com.liaobaikai.ngoxdb.bean.rs.ImportedKey;
-import com.liaobaikai.ngoxdb.boot.JdbcTemplate2;
 import com.liaobaikai.ngoxdb.core.dao.BasicDatabaseDao;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -34,12 +32,12 @@ public class OracleDatabaseDao extends BasicDatabaseDao {
         // QUERY_SUPPORT_CHARSET("SELECT UNIQUE VALUE FROM V$NLS_VALID_VALUES WHERE PARAMETER = ?"),
 
         // 查询数据库字符集信息
-        QUERY_DATABASE_CHARSET("SELECT " +
-                "NULL AS TABLE_CAT, " +
-                "USER AS TABLE_SCHEM, " +
-                "USERENV('LANGUAGE') CHARSET_NAME, " +
-                "LENGTHB('\uD842\uDFB7') MAX_LEN " +
-                "FROM DUAL"),
+        // QUERY_DATABASE_CHARSET("SELECT " +
+        //         "NULL AS TABLE_CAT, " +
+        //         "USER AS TABLE_SCHEM, " +
+        //         "USERENV('LANGUAGE') CHARSET_NAME, " +
+        //         "LENGTHB('\uD842\uDFB7') MAX_LEN " +
+        //         "FROM DUAL"),
 
         // QUERY_ALL_TABLE("SELECT " +
         //         "NULL TABLE_CAT, " +
@@ -87,21 +85,19 @@ public class OracleDatabaseDao extends BasicDatabaseDao {
     }
 
     private final DatabaseInfo databaseInfo;
-    private final String userName;
 
-    public OracleDatabaseDao(JdbcTemplate2 jdbcTemplate) {
-        super(jdbcTemplate);
+    public OracleDatabaseDao(NgoxDbMaster ngoxDbMaster) {
+        super(ngoxDbMaster);
 
         // oracle jdbc源码：
         // oracle.jdbc.OracleDatabaseMetaData.getTables()
         // oracle.jdbc.driver.OracleDatabaseMetaData.getColumns()
-        userName = this.getJdbcTemplate().execute((ConnectionCallback<String>) con -> {
+        this.getJdbcTemplate().execute((ConnectionCallback<Void>) con -> {
             if (con.isWrapperFor(OracleConnection.class)) {
                 OracleConnection oConnection = con.unwrap(OracleConnection.class);
                 oConnection.setRemarksReporting(true);
-                return oConnection.getUserName();
             }
-            return con.getMetaData().getUserName();
+            return null;
         });
 
         this.databaseInfo = this.initDatabaseInfo();
@@ -112,8 +108,9 @@ public class OracleDatabaseDao extends BasicDatabaseDao {
         // 数据库默认字符集
         // 数据库支持的字符集
         // https://docs.oracle.com/goldengate/1212/gg-winux/GWUAD/wu_charsets.htm#GWUAD733
-        return this.getJdbcTemplate()
-                .queryForList2(Statement.QUERY_DATABASE_CHARSET.statement, DatabaseInfo.class).get(0);
+        // return this.getJdbcTemplate()
+        //         .queryForList(Statement.QUERY_DATABASE_CHARSET.statement, DatabaseInfo.class).get(0);
+        return null;
     }
 
     @Override
@@ -122,13 +119,13 @@ public class OracleDatabaseDao extends BasicDatabaseDao {
     }
 
     @Override
-    public DatabaseInfo getDatabaseInfo() {
-        return this.databaseInfo;
+    public String getSchema() {
+        return this.getNgoxDbMaster().getDatabaseConfig().getUsername().toUpperCase();
     }
 
     @Override
-    public String getSchemaPattern() {
-        return this.userName;
+    public DatabaseInfo getDatabaseInfo() {
+        return this.databaseInfo;
     }
 
     // @Override
@@ -139,7 +136,7 @@ public class OracleDatabaseDao extends BasicDatabaseDao {
     //             (tableName.length == 0 ? OracleStatement.QUERY_ALL_TABLE : OracleStatement.QUERY_TABLE).getStatement());
     //     Object[] params = this.getParams(sqlBuilder, tableName, null, this.getSchemaPattern());
     //
-    //     return this.getJdbcTemplate().queryForList2(sqlBuilder.toString(), TableInfo.class, params);
+    //     return this.getJdbcTemplate().queryForList(sqlBuilder.toString(), TableInfo.class, params);
     // }
     //
     @Override
@@ -175,9 +172,9 @@ public class OracleDatabaseDao extends BasicDatabaseDao {
         StringBuilder sqlBuilder = new StringBuilder(
                 (tableName.length > 0 ? Statement.QUERY_CHECK_CONSTRAINT : Statement.QUERY_ALL_CHECK_CONSTRAINT).getStatement());
 
-        Object[] params = this.getParams(sqlBuilder, tableName, null, this.getSchemaPattern());
+        Object[] params = this.getParams(sqlBuilder, tableName, null, this.getSchema());
 
-        final List<ConstraintInfo> resultList = this.getJdbcTemplate().queryForList2(sqlBuilder.toString(), ConstraintInfo.class, params);
+        final List<ConstraintInfo> resultList = this.getJdbcTemplate().queryForList(sqlBuilder.toString(), ConstraintInfo.class, params);
 
         // 1.名称问题
         // 2.过滤非空约束，如"USER_NAME" IS NOT NULL
@@ -193,8 +190,8 @@ public class OracleDatabaseDao extends BasicDatabaseDao {
     }
 
     @Override
-    public List<IndexInfo2> getIndexInfo(String schema, String tableName) {
-        return this.getIndexInfo(null, schema, tableName, false, false);
+    public List<IndexInfo2> getIndexInfo(String tableName) {
+        return this.getIndexInfo(null, this.getSchema(), tableName, false, false);
     }
 
     private List<IndexInfo2> getIndexInfo(String catalog, String schema, String table,
@@ -216,16 +213,7 @@ public class OracleDatabaseDao extends BasicDatabaseDao {
         }
         final String string5 = string + string2 + "union\n" + string3 + string4 + s4 + "  and i.index_name = c.index_name\n  and i.table_owner = c.table_owner\n  and i.table_name = c.table_name\n  and i.owner = c.index_owner\n" + "order by non_unique, type, index_name, ordinal_position\n";
 
-        return this.getJdbcTemplate().queryForList2(string5, IndexInfo2.class, table, schema, table, schema);
+        return this.getJdbcTemplate().queryForList(string5, IndexInfo2.class, table, schema, table, schema);
     }
 
-    @Override
-    public List<ImportedKey> getImportedKeys(String schema, String tableName) {
-        return super.getImportedKeys(schema, tableName);
-    }
-
-    @Override
-    public void dropTable(String tableName) {
-        this.getJdbcTemplate().execute("DROP TABLE " + tableName + " CASCADE CONSTRAINTS");
-    }
 }

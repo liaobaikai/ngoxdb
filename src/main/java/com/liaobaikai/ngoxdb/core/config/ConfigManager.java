@@ -1,11 +1,15 @@
 package com.liaobaikai.ngoxdb.core.config;
 
-import com.liaobaikai.ngoxdb.boot.JdbcTemplate2;
-import com.liaobaikai.ngoxdb.core.enums.fn.DatabaseFunctionEnum;
-import com.liaobaikai.ngoxdb.core.service.DatabaseConverter;
-import com.zaxxer.hikari.HikariDataSource;
+import com.alibaba.druid.pool.DruidDataSource;
+import com.alibaba.fastjson.JSONObject;
+import com.liaobaikai.ngoxdb.bean.NgoxDbMaster;
+import com.liaobaikai.ngoxdb.boot.JdbcTemplate;
+import com.liaobaikai.ngoxdb.core.converter.DatabaseConverter;
+import com.liaobaikai.ngoxdb.core.dialect.DatabaseDialect;
+import com.liaobaikai.ngoxdb.core.enums.DatabaseVendorEnum;
+import com.liaobaikai.ngoxdb.core.enums.func.DatabaseFunctionEnum;
+import com.liaobaikai.ngoxdb.core.func.SQLFunction;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.BeanFactoryAware;
@@ -33,26 +37,21 @@ import java.util.*;
 @Component
 public class ConfigManager implements BeanFactoryAware {
 
-    private static final String MASTER_DATASOURCE_CONFIG_PREFIX = "ngoxdb.master";
-    private static final String SLAVE_DATASOURCE_CONFIG_PREFIX = "ngoxdb.slave";
-
-    // private static final Map<String, DatabaseConverter> DATABASE_CONVERTER_MAP = new HashMap<>();
+    private static final String MASTER_DATASOURCE_CONFIG_PREFIX = "master";
+    private static final String SLAVE_DATASOURCE_CONFIG_PREFIX = "slave";
 
     private static final List<DatabaseConverter> MASTER_DATABASE_CONVERTER = new ArrayList<>(1);
     private static final List<DatabaseConverter> SLAVE_DATABASE_CONVERTERS = new ArrayList<>();
 
-    // private static String masterDatabaseConverterBeanName;
-    // private static final List<String> SLAVE_DATABASE_CONVERTER_BEAN_NAMES = new ArrayList<>();
+    private final Map<DatabaseConfig, JdbcTemplate> mapOfJdbcTemplate = new HashMap<>();
 
-    private final List<JdbcTemplate2> jdbcTemplates = new ArrayList<>();
-    // private final Map<String, String> registerBeanNames = new HashMap<>();
-
-    private JdbcTemplate2 jdbcTemplate;
+    private DatabaseConfig mDatabaseConfig;
+    private Map<Class<? extends DatabaseDialect>, DatabaseDialect> databaseDialectMap = new HashMap<>();
 
     /**
      * 数据库厂家函数注册中心
      */
-    private static final Map<String, Map<DatabaseFunctionEnum, String[]>> DATABASE_VENDOR_DATE_TYPE_CONTAINER = new HashMap<>();
+    private static final Map<String, Map<DatabaseFunctionEnum, SQLFunction[]>> DATABASE_VENDOR_DATE_TYPE_CONTAINER = new HashMap<>();
 
     /////////////////////// 配置信息 ///////////////////////
 
@@ -60,16 +59,17 @@ public class ConfigManager implements BeanFactoryAware {
     public void setEnvironment(Environment environment) {
         Binder binder = Binder.get(environment);
         // master
-        DatabaseConfig databaseConfig = binder.bind(MASTER_DATASOURCE_CONFIG_PREFIX, Bindable.of(DatabaseConfig.class)).get();
-        databaseConfig.setName(" MASTER");
-        log.info("Master, Database vendor: {}, Username: {}, JDBC-URL: {}", databaseConfig.getDatabase(), databaseConfig.getUsername(), databaseConfig.getUrl());
-        DataSource ds = buildDataSource(databaseConfig, "master-data-source");
-        jdbcTemplate = new JdbcTemplate2(ds, databaseConfig);
-        jdbcTemplates.add(jdbcTemplate);
+        mDatabaseConfig = binder.bind(MASTER_DATASOURCE_CONFIG_PREFIX, Bindable.of(DatabaseConfig.class)).get();
+        mDatabaseConfig.setName(" MASTER");
+        log.info("Master, Database vendor: {}, Username: {}, JDBC-URL: {}", mDatabaseConfig.getDatabase(), mDatabaseConfig.getUsername(), mDatabaseConfig.getUrl());
+        DataSource ds = buildDataSource(mDatabaseConfig, "master-data-source");
+        mapOfJdbcTemplate.put(mDatabaseConfig, new JdbcTemplate(ds));
 
+        // 注册多个连接
 
         // slave
         List<DatabaseConfig> databaseConfigs;
+        DatabaseConfig databaseConfig;
         try {
             databaseConfigs = binder.bind(SLAVE_DATASOURCE_CONFIG_PREFIX, Bindable.listOf(DatabaseConfig.class)).get();
         } catch (NoSuchElementException e) {
@@ -80,10 +80,11 @@ public class ConfigManager implements BeanFactoryAware {
 
         for (int i = 0; i < databaseConfigs.size(); i++) {
             databaseConfig = databaseConfigs.get(i);
-            ds = buildDataSource(databaseConfig, "slave-data-source" + i);
-            log.info("SLAVE-{}, Database vendor: {}, Username: {}, JDBC-URL: {}", (i + 1), databaseConfig.getDatabase(), databaseConfig.getUsername(), databaseConfig.getUrl());
-            databaseConfig.setName("SLAVE-" + (i + 1));
-            jdbcTemplates.add(new JdbcTemplate2(ds, databaseConfig));
+            databaseConfig.setName(String.format("SLAVE-%s", i));
+
+            log.info("SLAVE-{}, Database vendor: {}, Username: {}, JDBC-URL: {}", i, databaseConfig.getDatabase(), databaseConfig.getUsername(), databaseConfig.getUrl());
+            ds = buildDataSource(databaseConfig, String.format("slave-data-source-%s", i));
+            mapOfJdbcTemplate.put(databaseConfig, new JdbcTemplate(ds));
         }
     }
 
@@ -95,11 +96,13 @@ public class ConfigManager implements BeanFactoryAware {
      * @return
      */
     private DataSource buildDataSource(DatabaseConfig dataBaseConfig, String dataSourceName) {
+
         if (!dataBaseConfig.isValid()) {
-            return null;
+            throw new IllegalArgumentException("datasource is invalid: " + JSONObject.toJSONString(dataBaseConfig));
         }
-        HikariDataSource dataSource = new HikariDataSource();
-        dataSource.setJdbcUrl(dataBaseConfig.getUrl());
+        DruidDataSource dataSource = new DruidDataSource();
+        dataSource.setName(dataSourceName);
+        dataSource.setUrl(dataBaseConfig.getUrl());
         dataSource.setDriverClassName(dataBaseConfig.getDriverClassName());
         dataSource.setUsername(dataBaseConfig.getUsername());
         dataSource.setPassword(dataBaseConfig.getPassword());
@@ -118,7 +121,9 @@ public class ConfigManager implements BeanFactoryAware {
         String[] beanNamesForType = listableBeanFactory.getBeanNamesForType(DatabaseConverter.class);
 
         // 重新注册
-        jdbcTemplates.forEach(jdbcTemplate2 -> {
+        for (Map.Entry<DatabaseConfig, JdbcTemplate> en : this.mapOfJdbcTemplate.entrySet()) {
+            JdbcTemplate jdbcTemplate = en.getValue();
+            DatabaseConfig databaseConfig = en.getKey();
 
             for (String beanName : beanNamesForType) {
 
@@ -128,38 +133,39 @@ public class ConfigManager implements BeanFactoryAware {
                     continue;
                 }
 
-                DatabaseConverter databaseConverter = (DatabaseConverter) listableBeanFactory.getBean(beanName);
-                if (jdbcTemplate2.getDatabaseConfig().getDatabase().equals(databaseConverter.getDatabaseVendor())) {
+                DatabaseConverter registeredConverter = (DatabaseConverter) listableBeanFactory.getBean(beanName);
+                if (registeredConverter.getDatabaseVendor() == null) {
+                    throw new NullPointerException(registeredConverter.getClass().getName() + ".getDatabaseVendor() not implement!");
+                }
 
-                    // 注册时间默认值到databaseVendorDateTypeMap
-                    if (!DATABASE_VENDOR_DATE_TYPE_CONTAINER.containsKey(databaseConverter.getDatabaseVendor())) {
-                        DATABASE_VENDOR_DATE_TYPE_CONTAINER.put(databaseConverter.getDatabaseVendor(), databaseConverter.getDatabaseFunctionMap());
-                    }
+                if (databaseConfig.getDatabase().equals(registeredConverter.getDatabaseVendor())) {
 
-                    // 默认的是否存在
-                    // String newBeanName;
-                    boolean isMaster = jdbcTemplate2 == jdbcTemplate;
-
-                    // if(!registerBeanNames.containsKey(beanName)){
-                    //     newBeanName = beanName;
-                    // } else {
-                    //     for(int i = 0; ; i++){
-                    //         newBeanName = String.format("%s-%s-%d", beanName, (isMaster ? "master": "slave"), i);
-                    //         if(!registerBeanNames.containsKey(newBeanName)){
-                    //             break;
-                    //         }
-                    //     }
-                    // }
+                    boolean isMaster = databaseConfig == mDatabaseConfig;
 
                     try {
+                        // 获取对应的方言Class
+                        DatabaseDialect databaseDialect = databaseDialectMap.get(registeredConverter.getDatabaseDialectClass());
+                        if (databaseDialect == null) {
+                            databaseDialect = registeredConverter.getDatabaseDialectClass().newInstance();
+                            databaseDialectMap.put(registeredConverter.getDatabaseDialectClass(), databaseDialect);
+                        }
+
                         Class<?> clazz = Class.forName(beanDefinition.getBeanClassName());
-                        Constructor<?> constructor = clazz.getConstructor(JdbcTemplate2.class, boolean.class, String.class, DatabaseConfig.class);
-                        DatabaseConverter converter = (DatabaseConverter) constructor.newInstance(
-                                jdbcTemplate2,
-                                isMaster,
-                                jdbcTemplate.getDatabaseConfig().getDatabase(),
-                                jdbcTemplate2.getDatabaseConfig()
-                        );
+                        Constructor<?> constructor = clazz.getConstructor(NgoxDbMaster.class);
+
+                        NgoxDbMaster ngoxDbMaster = new NgoxDbMaster();
+                        ngoxDbMaster.setJdbcTemplate(jdbcTemplate);
+                        ngoxDbMaster.setDatabaseDialect(databaseDialect);
+                        ngoxDbMaster.setMaster(isMaster);
+                        ngoxDbMaster.setMasterDatabaseVendor(mDatabaseConfig.getDatabase());
+                        ngoxDbMaster.setDatabaseConfig(databaseConfig);
+
+                        DatabaseConverter converter = (DatabaseConverter) constructor.newInstance(ngoxDbMaster);
+
+                        // 注册函数
+                        if (!DATABASE_VENDOR_DATE_TYPE_CONTAINER.containsKey(converter.getDatabaseVendor())) {
+                            DATABASE_VENDOR_DATE_TYPE_CONTAINER.put(converter.getDatabaseVendor(), databaseDialect.getSQLFunctionMap());
+                        }
 
                         if (isMaster) {
                             MASTER_DATABASE_CONVERTER.add(converter);
@@ -171,37 +177,10 @@ public class ConfigManager implements BeanFactoryAware {
                         e.printStackTrace();
                     }
 
-
-                    // if(isMaster){
-                    //     masterDatabaseConverterBeanName = newBeanName;
-                    // } else {
-                    //     SLAVE_DATABASE_CONVERTER_BEAN_NAMES.add(newBeanName);
-                    // }
-                    //
-                    //
-                    // BeanDefinitionBuilder beanDefinitionBuilder = BeanDefinitionBuilder.genericBeanDefinition(beanDefinition.getBeanClassName());
-                    // beanDefinitionBuilder.addConstructorArgValue(jdbcTemplate2)
-                    //                      .addConstructorArgValue(isMaster)
-                    //                      .addConstructorArgValue(jdbcTemplate.getDatabaseConfig().getDatabase());
-                    // BeanUtils.copyProperties(beanDefinition, beanDefinitionBuilder);
-                    // listableBeanFactory.registerBeanDefinition(newBeanName, beanDefinitionBuilder.getBeanDefinition());
-                    // registerBeanNames.put(newBeanName, beanDefinition.getBeanClassName());
-
                     break;
                 }
             }
-
-        });
-
-
-        // 如果存在这个bean
-        // pendingDestroyBeans.forEach(listableBeanFactory::destroyBean);
-
-        // DATABASE_CONVERTER_MAP.putAll(listableBeanFactory.getBeansOfType(DatabaseConverter.class));
-        //
-        // MASTER_DATABASE_CONVERTER.add(DATABASE_CONVERTER_MAP.get(masterDatabaseConverterBeanName));
-        // SLAVE_DATABASE_CONVERTER_BEAN_NAMES.forEach(beanName -> SLAVE_DATABASE_CONVERTERS.add(DATABASE_CONVERTER_MAP.get(beanName)));
-
+        }
     }
 
     public static DatabaseConverter getMasterDatabaseConverter() {
@@ -227,23 +206,28 @@ public class ConfigManager implements BeanFactoryAware {
                                                     String masterDatabaseVendor,
                                                     String slaveDatabaseVendor) {
 
+        // 相同的厂家，直接返回。
+        if (DatabaseVendorEnum.isSameDatabaseVendor(masterDatabaseVendor, slaveDatabaseVendor)) {
+            return masterDateTypeDefault;
+        }
+
         if (masterDateTypeDefault == null || masterDateTypeDefault.length() == 0) {
             return null;
         }
 
-        Map<DatabaseFunctionEnum, String[]> databaseFunctionEnumMap = DATABASE_VENDOR_DATE_TYPE_CONTAINER.get(masterDatabaseVendor);
+        Map<DatabaseFunctionEnum, SQLFunction[]> databaseFunctionEnumMap = DATABASE_VENDOR_DATE_TYPE_CONTAINER.get(masterDatabaseVendor);
 
         // 获取时间默认值对用的主数据库中的DateTypeEnum。
         boolean isJump = false;
 
         // 相等匹配
         DatabaseFunctionEnum masterDatabaseFunctionEnum = null;
-        for (Map.Entry<DatabaseFunctionEnum, String[]> en : databaseFunctionEnumMap.entrySet()) {
+        for (Map.Entry<DatabaseFunctionEnum, SQLFunction[]> en : databaseFunctionEnumMap.entrySet()) {
             if (isJump) {
                 break;
             }
-            for (String value : en.getValue()) {
-                if (StringUtils.isNotEmpty(value) && masterDateTypeDefault.equalsIgnoreCase(value)) {
+            for (SQLFunction sqlFunction : en.getValue()) {
+                if (masterDateTypeDefault.equalsIgnoreCase(sqlFunction.build())) {
                     isJump = true;
                     masterDatabaseFunctionEnum = en.getKey();
                     break;
@@ -252,14 +236,14 @@ public class ConfigManager implements BeanFactoryAware {
         }
 
         // 模糊匹配
-        if(masterDatabaseFunctionEnum == null){
-            for (Map.Entry<DatabaseFunctionEnum, String[]> en : databaseFunctionEnumMap.entrySet()) {
+        if (masterDatabaseFunctionEnum == null) {
+            for (Map.Entry<DatabaseFunctionEnum, SQLFunction[]> en : databaseFunctionEnumMap.entrySet()) {
                 if (isJump) {
                     break;
                 }
-                for (String value : en.getValue()) {
+                for (SQLFunction sqlFunction : en.getValue()) {
                     // 首先全部匹配。如果匹配不到，则使用包含的方式。
-                    if (StringUtils.isNotEmpty(value) && masterDateTypeDefault.toLowerCase().contains(value.toLowerCase())) {
+                    if (masterDateTypeDefault.toLowerCase().contains(sqlFunction.build())) {
                         isJump = true;
                         masterDatabaseFunctionEnum = en.getKey();
                         break;
@@ -274,7 +258,7 @@ public class ConfigManager implements BeanFactoryAware {
             return null;
         }
 
-        Map<DatabaseFunctionEnum, String[]> slaveDateTypeEnumMap = DATABASE_VENDOR_DATE_TYPE_CONTAINER.get(slaveDatabaseVendor);
+        Map<DatabaseFunctionEnum, SQLFunction[]> slaveDateTypeEnumMap = DATABASE_VENDOR_DATE_TYPE_CONTAINER.get(slaveDatabaseVendor);
 
         if (slaveDateTypeEnumMap == null) {
             // 不支持
@@ -282,13 +266,13 @@ public class ConfigManager implements BeanFactoryAware {
         }
 
         // 获取对应的时间默认值
-        String[] values = slaveDateTypeEnumMap.get(masterDatabaseFunctionEnum);
+        SQLFunction[] sqlFunctions = slaveDateTypeEnumMap.get(masterDatabaseFunctionEnum);
         // 默认获取第一个
-        if (values == null || values.length == 0) {
+        if (sqlFunctions == null || sqlFunctions.length == 0) {
             return null;
         }
         // 匹配不到
-        return values[0];
+        return sqlFunctions[0].build();
     }
 
 }

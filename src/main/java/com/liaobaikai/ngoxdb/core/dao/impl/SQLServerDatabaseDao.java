@@ -1,17 +1,16 @@
 package com.liaobaikai.ngoxdb.core.dao.impl;
 
+import com.liaobaikai.ngoxdb.bean.NgoxDbMaster;
 import com.liaobaikai.ngoxdb.bean.info.ColumnInfo;
 import com.liaobaikai.ngoxdb.bean.info.ConstraintInfo;
 import com.liaobaikai.ngoxdb.bean.info.DatabaseInfo;
 import com.liaobaikai.ngoxdb.bean.info.TableInfo;
-import com.liaobaikai.ngoxdb.boot.JdbcTemplate2;
 import com.liaobaikai.ngoxdb.core.dao.BasicDatabaseDao;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * SQLServer数据库访问
@@ -28,11 +27,11 @@ public class SQLServerDatabaseDao extends BasicDatabaseDao {
         // 查询数据库字符集信息
         // SQLServer不支持字符 "𠮷", 保存后查询变成 ??
         //
-        QUERY_DATABASE_CHARSET("SELECT " +
-                "DB_NAME() AS TABLE_CAT, " +
-                "SCHEMA_NAME() AS TABLE_SCHEM, " +
-                "SERVERPROPERTY('SqlCharSetName') CHARSET_NAME, " +
-                "DATALENGTH('國') MAX_LEN"),
+        // QUERY_DATABASE_CHARSET("SELECT " +
+        //         "DB_NAME() AS TABLE_CAT, " +
+        //         "SCHEMA_NAME() AS TABLE_SCHEM, " +
+        //         "SERVERPROPERTY('SqlCharSetName') CHARSET_NAME, " +
+        //         "DATALENGTH('國') MAX_LEN"),
 
         // 检查约束
         QUERY_ALL_CHECK_CONSTRAINT("SELECT " +
@@ -84,21 +83,27 @@ public class SQLServerDatabaseDao extends BasicDatabaseDao {
 
     private final DatabaseInfo databaseInfo;
 
-    public SQLServerDatabaseDao(JdbcTemplate2 jdbcTemplate) {
-        super(jdbcTemplate);
+    public SQLServerDatabaseDao(NgoxDbMaster ngoxDbMaster) {
+        super(ngoxDbMaster);
         this.databaseInfo = initDatabaseInfo();
     }
 
     @Override
     protected DatabaseInfo initDatabaseInfo() {
         // 数据库默认字符集
-        return this.getJdbcTemplate()
-                .queryForList2(Statement.QUERY_DATABASE_CHARSET.statement, DatabaseInfo.class).get(0);
+        // return this.getJdbcTemplate()
+        //         .queryForList(Statement.QUERY_DATABASE_CHARSET.statement, DatabaseInfo.class).get(0);
+        return null;
     }
 
     @Override
     public Logger getLogger() {
         return log;
+    }
+
+    @Override
+    public String getSchema() {
+        return "dbo";
     }
 
     @Override
@@ -116,7 +121,7 @@ public class SQLServerDatabaseDao extends BasicDatabaseDao {
 
         Object[] params = this.getParams(sqlBuilder, tableName, null, null);
 
-        List<TableInfo> tableList = this.getJdbcTemplate().queryForList2(sqlBuilder.toString(), TableInfo.class, params);
+        List<TableInfo> tableList = this.getJdbcTemplate().queryForList(sqlBuilder.toString(), TableInfo.class, params);
 
         // 表注释
         tables.forEach(table -> tableList.forEach(table2 -> {
@@ -141,7 +146,7 @@ public class SQLServerDatabaseDao extends BasicDatabaseDao {
         Object[] params = this.getParams(sqlBuilder, tableName, null, null);
 
         // 合并数据
-        List<ColumnInfo> columnInfoList = this.getJdbcTemplate().queryForList2(sqlBuilder.toString(), ColumnInfo.class, params);
+        List<ColumnInfo> columnInfoList = this.getJdbcTemplate().queryForList(sqlBuilder.toString(), ColumnInfo.class, params);
         columnInfoList.forEach(columnInfo -> {
 
 
@@ -170,7 +175,7 @@ public class SQLServerDatabaseDao extends BasicDatabaseDao {
 
         Object[] params = this.getParams(sqlBuilder, tableName, "OBJECT_ID(?)", null);
 
-        List<ConstraintInfo> resultList = this.getJdbcTemplate().queryForList2(sqlBuilder.toString(), ConstraintInfo.class, params);
+        List<ConstraintInfo> resultList = this.getJdbcTemplate().queryForList(sqlBuilder.toString(), ConstraintInfo.class, params);
 
         // 1.名称问题
         // 2.过滤非空约束
@@ -183,26 +188,24 @@ public class SQLServerDatabaseDao extends BasicDatabaseDao {
         return resultList;
     }
 
-    @Override
-    public void dropTable(String tableName) {
-        // sqlserver 不支持 cascade的操作
-        //
-        // 删除表前查询引用关系，如果存在其他表有引用的话，需要删除表的引用。
-        List<Map<String, Object>> queryResponse = this.getJdbcTemplate()
-                .queryForList("select fk.name as NAME," +
-                        "fk.object_id," +
-                        "OBJECT_NAME(fk.parent_object_id) as REFERENCE_TABLE_NAME " +
-                        "from sys.foreign_keys as fk join sys.objects as o " +
-                        "on fk.referenced_object_id=o.object_id where o.name=?", tableName.substring(1, tableName.length() - 1));
-
-        // 删除表的约束
-        for (Map<String, Object> row : queryResponse) {
-            String refTable = row.get("REFERENCE_TABLE_NAME").toString();
-            String fkName = row.get("NAME").toString();
-            getLogger().info("Table {} exists foreign key, ALTER TABLE [{}] DROP CONSTRAINT {}", tableName, refTable, fkName);
-            this.getJdbcTemplate().execute("ALTER TABLE [" + refTable + "] DROP CONSTRAINT [" + fkName + "]");
-        }
-
-        super.dropTable(tableName);
-    }
+    // @Override
+    // public void dropForeignKey(String tableName) {
+    //
+    //     // 删除表前查询引用关系，如果存在其他表有引用的话，需要删除表的引用。
+    //     List<Map<String, Object>> queryResponse = this.getJdbcTemplate()
+    //             .queryForList("select fk.name as NAME," +
+    //                     "fk.object_id," +
+    //                     "OBJECT_NAME(fk.parent_object_id) as REFERENCE_TABLE_NAME " +
+    //                     "from sys.foreign_keys as fk join sys.objects as o " +
+    //                     "on fk.referenced_object_id=o.object_id where o.name = ?", tableName);
+    //
+    //     // 删除表的约束
+    //     for (Map<String, Object> row : queryResponse) {
+    //         String refTable = row.get("REFERENCE_TABLE_NAME").toString();
+    //         String fkName = row.get("NAME").toString();
+    //         getLogger().info("Table {} exists foreign key, ALTER TABLE [{}] DROP CONSTRAINT {}", tableName, refTable, fkName);
+    //
+    //         this.execute("ALTER TABLE [" + refTable + "] DROP CONSTRAINT [" + fkName + "]");
+    //     }
+    // }
 }

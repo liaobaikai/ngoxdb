@@ -1,14 +1,14 @@
 package com.liaobaikai.ngoxdb;
 
-import com.alibaba.fastjson.JSON;
+import com.liaobaikai.ngoxdb.anno.Description;
 import com.liaobaikai.ngoxdb.bean.ComparisonResult;
 import com.liaobaikai.ngoxdb.bean.info.ColumnInfo;
 import com.liaobaikai.ngoxdb.bean.info.TableInfo;
+import com.liaobaikai.ngoxdb.core.comparator.DatabaseComparator;
 import com.liaobaikai.ngoxdb.core.config.ConfigManager;
+import com.liaobaikai.ngoxdb.core.config.DatabaseConfig;
+import com.liaobaikai.ngoxdb.core.converter.DatabaseConverter;
 import com.liaobaikai.ngoxdb.core.enums.DatabaseVendorEnum;
-import com.liaobaikai.ngoxdb.core.listener.OnMigrateTableDataListener;
-import com.liaobaikai.ngoxdb.core.service.DatabaseComparator;
-import com.liaobaikai.ngoxdb.core.service.DatabaseConverter;
 import com.liaobaikai.ngoxdb.utils.CommonUtils;
 import com.liaobaikai.ngoxdb.utils.DateUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -17,92 +17,157 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 
+import java.lang.reflect.Field;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
 
 // https://docs.oracle.com/cloud/help/zh_CN/analytics-cloud/ACSDS/GUID-33F45B17-782F-4A56-9FA9-7163A3BD79B1.htm#ACSDS-GUID-5080E628-864A-4024-B06A-764AED575909
 //
+@Slf4j
 @SpringBootApplication(exclude = {DataSourceAutoConfiguration.class})
 public class BootApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(BootApplication.class, args);
+        if (!parseArguments(args)) {
+            return;
+        }
 
-        DatabaseConverter master = ConfigManager.getMasterDatabaseConverter();
-        List<DatabaseConverter> slaves = ConfigManager.getSlaveDatabaseConverters();
+        SpringApplication springApplication = new SpringApplication(BootApplication.class);
+        springApplication.setBannerMode(Banner.Mode.OFF);
+        springApplication.run(args);
 
-        master.getLogger().info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>| Collecting all tables... |<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
-        List<TableInfo> tis = master.getTableInfo();
-
-        master.getLogger().info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>| Create tables... |<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
-        slaves.forEach(c -> c.createAllTable(tis));
-
-        // 拉取数据
-        master.getLogger().info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>| Migrating data... |<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
-        master.migrateAllTable(tis, new OnMigrateTableDataListener() {
-
-            @Override
-            public void onBeforeMigrateTableData(TableInfo ti, long tableRows, int pageSize) {
-                if(tableRows == 0) {
-                    return;
-                }
-                slaves.forEach(slave -> {
-                    slave.beforeMigrateTableData(ti);
-                    // 截断表
-                    if (slave.getDatabaseConfig().isTruncateTable()) {
-                        slave.getDatabaseDao().truncateTable(slave.getRightName(ti.getTableName()));
-                    }
-                });
-            }
-
-            @Override
-            public void onMigrateTableData(List<Object[]> batchArgs, TableInfo ti, int pageNum) {
-                slaves.forEach(slave -> {
-                    // 迁移数据
-                    slave.postData(batchArgs, ti);
-                });
-            }
-
-            @Override
-            public void onAfterMigrateTableData(TableInfo ti, long tableRows) {
-                slaves.forEach(slave -> {
-                    // 迁移数据
-                    slave.afterMigrateTableData(ti, tableRows);
-                });
-            }
-        });
-
-        // 应用
-        master.getLogger().info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>| Create indexes and constraints... |<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
-        slaves.forEach(slave -> {
-            slave.postMetadata();
-
-            if (slave.getConvertFailTableList().size() > 0) {
-                System.out.println("###################################################################");
-                System.out.println("#                              ERROR                              #");
-                System.out.println("###################################################################");
-                System.out.println(JSON.toJSONString(slave.getConvertFailTableList()));
-            }
-        });
-
-        master.getLogger().info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>| Table rows count... |<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
-        slaves.forEach(slave -> {
-            List<Map.Entry<String, Long>> entryList = new ArrayList<>(slave.getTableRowCount().entrySet());
-            entryList.sort((o1, o2) -> (int) (o2.getValue() - o1.getValue()));
-
-            for(Map.Entry<String, Long> tableRowCountMap: entryList){
-                slave.getLogger().info("[{}] Table: {}, Rows: {}",
-                        slave.getDatabaseConfig().getName(),
-                        String.format("%-"+master.getTableNameMaxLength()+"s", tableRowCountMap.getKey()),
-                        tableRowCountMap.getValue());
-            }
-
-        });
+        NgoxDbWorker ngoxDbWorker = new NgoxDbWorker();
+        ngoxDbWorker.doWork();
+        ngoxDbWorker.finish();
 
         // 比较数据库数据
         // compareSlaveDatabases(tis);
 
+    }
+
+    /**
+     * 解析参数
+     *
+     * @param args 参数
+     * @return 是否继续下一步
+     */
+    private static boolean parseArguments(String[] args) {
+
+        for (String arg : args) {
+            switch (arg) {
+                case "--help":
+                case "-h":
+                    showHelpDoc();
+                    return false;
+                case "-v":
+                case "--version":
+                    showVersion();
+                    break;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 展示帮助文档
+     */
+    private static void showHelpDoc() {
+
+        // 获取所有的参数
+        System.out.println("主库参数:");
+        Field[] fields = DatabaseConfig.class.getDeclaredFields();
+        for (Field field : fields) {
+            Description annotation = field.getAnnotation(Description.class);
+            if (annotation != null) {
+                if ("name".equalsIgnoreCase(annotation.name())
+                        || "replace-table".equalsIgnoreCase(annotation.name())
+                        || "truncate-table".equalsIgnoreCase(annotation.name())
+                        || "generate-name".equalsIgnoreCase(annotation.name())
+                        || "master-remap-table".equalsIgnoreCase(annotation.name())
+                        || "create-table-params".equalsIgnoreCase(annotation.name())
+                        || "remap-table".equalsIgnoreCase(annotation.name())) {
+                    continue;
+                }
+                StringBuilder stringBuilder = new StringBuilder();
+                stringBuilder.append(String.format("%-32s %s", "--master." + annotation.name(), annotation.label()));
+                printUsage(annotation, stringBuilder);
+            }
+
+        }
+        System.out.println("\n从库参数:");
+        /// slave ..........
+        Field[] slaveFields = DatabaseConfig.class.getDeclaredFields();
+        for (Field field : slaveFields) {
+            Description annotation = field.getAnnotation(Description.class);
+            if (annotation != null) {
+                if ("page-size".equalsIgnoreCase(annotation.name())
+                        || "name".equalsIgnoreCase(annotation.name())
+                        || "tables".equalsIgnoreCase(annotation.name())) {
+                    continue;
+                }
+                StringBuilder stringBuilder = new StringBuilder();
+                stringBuilder.append(String.format("%-32s %s", "--slave." + annotation.name(), annotation.label()));
+                stringBuilder.append(String.format("\n%-32s Alias: --slave.0.%s", "", annotation.name()));
+
+                printUsage(annotation, stringBuilder);
+            }
+
+        }
+
+        System.out.println("\n以下写法的参数可支持多个同步从库，数字从0开始");
+        /// slave ..........
+        Field[] slaveArrFields = DatabaseConfig.class.getDeclaredFields();
+        for (Field field : slaveArrFields) {
+            Description annotation = field.getAnnotation(Description.class);
+            if (annotation != null) {
+                if ("page-size".equalsIgnoreCase(annotation.name())
+                        || "name".equalsIgnoreCase(annotation.name())
+                        || "tables".equalsIgnoreCase(annotation.name())) {
+                    continue;
+                }
+                StringBuilder stringBuilder = new StringBuilder();
+                stringBuilder.append(String.format("%-32s %s", "--slave.0." + annotation.name(), annotation.label()));
+
+                printUsage(annotation, stringBuilder);
+            }
+
+        }
+
+        System.out.println("\n");
+
+    }
+
+    private static void printUsage(Description annotation, StringBuilder stringBuilder) {
+        if (annotation.applyOn().length > 0) {
+            stringBuilder.append(", applyOn=(");
+            for (DatabaseVendorEnum vendorEnum : annotation.applyOn()) {
+                stringBuilder.append(vendorEnum.getVendor()).append(",");
+            }
+            stringBuilder.delete(stringBuilder.length() - 1, stringBuilder.length()).append(")");
+        }
+
+        if (annotation.defaultValue().length() > 0) {
+            stringBuilder.append(String.format("\n%32s", "")).append(" 默认值=").append(annotation.defaultValue());
+        }
+        if (annotation.name().equalsIgnoreCase("database")) {
+            // 数据库厂家
+            stringBuilder.append(String.format("\n%33s", ""));
+            stringBuilder.append("支持的数据库: ");
+            for (DatabaseVendorEnum databaseVendorEnum : DatabaseVendorEnum.values()) {
+                stringBuilder.append(databaseVendorEnum.getVendor()).append(",");
+            }
+            stringBuilder.delete(stringBuilder.length() - 1, stringBuilder.length());
+        }
+        System.out.println(stringBuilder);
+    }
+
+    /**
+     * 打印版本号
+     */
+    private static void showVersion() {
+        System.out.println("Ngoxdb: version: 1.1.0");
     }
 
     /**
@@ -125,7 +190,7 @@ public class BootApplication {
         // 源数据库获取比较器
         master.getComparator().compareAllTables(tis, (ti, tableRowCount, offset, limit, srcRowArgs) -> slaves.forEach(slave -> {
 
-            long slaveTableRowCount = slave.getDatabaseDao().getTableRowCount(null, slave.getRightName(ti.getTableName()));
+            long slaveTableRowCount = slave.getDatabaseDao().getTableRowCount(ti.getTableName());
             // 表的行数不一致
             if (tableRowCount != slaveTableRowCount) {
                 System.out.printf("Table: %s, MasterDatabase: %s[%s], SlaveDatabase: %s[%s] 行数不一致！ %n",
@@ -189,7 +254,7 @@ public class BootApplication {
             if (DatabaseVendorEnum.isSameDatabaseVendor(slave.getDatabaseVendor(), master.getDatabaseVendor()) || isJdbcDecimal) {
                 // 数据库厂家一样、主键/唯一键的类型是数字（无排序规则的问题）
                 // 获取目标端对应的行的数据。
-                List<Object[]> slaveRowArgs = slave.queryPaginationData(ti, offset, limit);
+                List<Object[]> slaveRowArgs = slave.pagination(ti, offset, limit);
 
                 // 比较数据
                 slaveComparator.compare(ti, srcRowArgs, slaveRowArgs);
@@ -202,7 +267,10 @@ public class BootApplication {
                         values[i] = srcRowArgs.get(i)[uniqueKeyIndex];
                     }
 
-                    List<Object[]> slaveRowArgs = slave.queryInData(ti, uniqueKeyName, values);
+                    Map<String, Object[]> queryCondition = new HashMap<>();
+                    queryCondition.put(uniqueKeyName, values);
+                    String preparedSql = slave.getDatabaseDialect().buildSelectPreparedSql(ti, queryCondition);
+                    List<Object[]> slaveRowArgs = slave.getDatabaseDao().query(preparedSql, values);
 
                     slaveComparator.compare(ti, srcRowArgs, slaveRowArgs, uniqueKeyIndex);
 

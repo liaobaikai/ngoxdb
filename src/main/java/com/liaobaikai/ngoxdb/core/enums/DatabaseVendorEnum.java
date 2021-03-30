@@ -17,6 +17,7 @@ public enum DatabaseVendorEnum {
     POSTGRESQL("postgresql", "org.postgresql.Driver", 5432),
     ORACLE("oracle", "oracle.jdbc.OracleDriver", 1521),
     DB2("db2", "com.ibm.db2.jcc.DB2Driver", 5000),
+    DM("dm", "dm.jdbc.driver.DmDriver", 5236),  // from: windows版本: dmdbms/drivers/jdbc/readme.txt
     MICROSOFT_ACCESS("msaccess", "net.ucanaccess.jdbc.UcanaccessDriver", -1),
     SQLITE("sqlite", "org.sqlite.JDBC", -1),
 
@@ -30,6 +31,7 @@ public enum DatabaseVendorEnum {
         this.vendor = vendor;
         this.driverClassName = driverClassName;
         this.defaultPort = defaultPort;
+
     }
 
     public static DatabaseVendorEnum getByName(String vendor) {
@@ -71,6 +73,10 @@ public enum DatabaseVendorEnum {
 
     public static boolean isDB2(String vendor) {
         return DatabaseVendorEnum.DB2.equals(getByName(vendor));
+    }
+
+    public static boolean isDM(String vendor) {
+        return DatabaseVendorEnum.DM.equals(getByName(vendor));
     }
 
     public static boolean isSameDatabaseVendor(String vendor, String vendor2) {

@@ -6,6 +6,7 @@ import java.io.StringWriter;
 import java.sql.Clob;
 import java.sql.SQLException;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -102,5 +103,25 @@ public class StringUtils extends org.apache.commons.lang3.StringUtils {
         return (CharSequence.class.isAssignableFrom(inValueType) ||
                 StringWriter.class.isAssignableFrom(inValueType));
     }
+
+    public static String join(char sp, String[] values) {
+        StringBuilder sBuilder = new StringBuilder();
+        for (int i = 0, len = values.length; i < len; i++) {
+            sBuilder.append(" ").append(values[i]);
+            if (i != len - 1) {
+                sBuilder.append(sp);
+            }
+        }
+        return sBuilder.toString();
+    }
+
+    public static String[] toArray(List<String> values) {
+        String[] result = new String[values.size()];
+        for (int i = 0, len = result.length; i < len; i++) {
+            result[i] = values.get(i);
+        }
+        return result;
+    }
+
 
 }

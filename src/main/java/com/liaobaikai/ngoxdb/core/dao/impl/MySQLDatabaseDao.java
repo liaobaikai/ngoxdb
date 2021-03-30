@@ -1,19 +1,17 @@
 package com.liaobaikai.ngoxdb.core.dao.impl;
 
+import com.liaobaikai.ngoxdb.bean.NgoxDbMaster;
 import com.liaobaikai.ngoxdb.bean.info.*;
-import com.liaobaikai.ngoxdb.bean.rs.ExportedKey;
 import com.liaobaikai.ngoxdb.bean.rs.ImportedKey;
-import com.liaobaikai.ngoxdb.boot.JdbcTemplate2;
+import com.liaobaikai.ngoxdb.core.constant.JdbcDataType;
 import com.liaobaikai.ngoxdb.core.dao.BasicDatabaseDao;
+import com.mysql.cj.MysqlType;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.function.Predicate;
 
 /**
  * MySQL数据访问
@@ -69,7 +67,7 @@ public class MySQLDatabaseDao extends BasicDatabaseDao {
                 " TABLE_NAME, " +
                 " COLUMN_NAME, " +
                 " INDEX_NAME, " +
-                " INDEX_TYPE AS INDEX_TYPE_DESC" +
+                " CASE WHEN INDEX_TYPE = 'BTREE' OR INDEX_TYPE = 'RTREE' THEN 3 WHEN INDEX_TYPE = 'HASH' THEN 2 WHEN INDEX_TYPE = 'FULLTEXT' THEN 10 WHEN INDEX_TYPE = 'SPATIAL' THEN 11 END TYPE " +
                 " FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?"),
         // 查询表的信息
         QUERY_TABLE_EXTEND("SELECT " +
@@ -103,20 +101,25 @@ public class MySQLDatabaseDao extends BasicDatabaseDao {
 
     private final DatabaseInfo databaseInfo;
 
-    public MySQLDatabaseDao(JdbcTemplate2 jdbcTemplate) {
-        super(jdbcTemplate);
+    public MySQLDatabaseDao(NgoxDbMaster ngoxDbMaster) {
+        super(ngoxDbMaster);
         this.databaseInfo = this.initDatabaseInfo();
     }
 
     @Override
     protected DatabaseInfo initDatabaseInfo() {
         return this.getJdbcTemplate()
-                .queryForList2(Statement.QUERY_DATABASE_CHARSET.statement, DatabaseInfo.class, this.getCatalog()).get(0);
+                .queryForList(Statement.QUERY_DATABASE_CHARSET.statement, DatabaseInfo.class, this.getSchema()).get(0);
     }
 
     @Override
     public Logger getLogger() {
         return log;
+    }
+
+    @Override
+    public String getSchema() {
+        return this.getNgoxDbMaster().getDatabaseConfig().getDatabaseName();
     }
 
     @Override
@@ -145,8 +148,8 @@ public class MySQLDatabaseDao extends BasicDatabaseDao {
 
         // 查询 AUTO_INCREMENT, TABLE_COLLATION, CREATE_OPTIONS
         List<TableInfo> queryResponse =
-                this.getJdbcTemplate().queryForList2(Statement.QUERY_TABLE_EXTEND.getStatement(),
-                        TableInfo.class, this.getCatalog(), "BASE TABLE");
+                this.getJdbcTemplate().queryForList(Statement.QUERY_TABLE_EXTEND.getStatement(),
+                        TableInfo.class, this.getSchema(), "BASE TABLE");
 
         tableInfoList.forEach(tableInfo -> {
             // 扩展信息
@@ -176,19 +179,58 @@ public class MySQLDatabaseDao extends BasicDatabaseDao {
         StringBuilder sqlBuilder = new StringBuilder(
                 (tableName.length > 0 ? Statement.QUERY_COLUMN_EXTEND : Statement.QUERY_ALL_COLUMN_EXTEND).getStatement());
 
-        Object[] params = this.getParams(sqlBuilder, tableName, null, this.getCatalog());
+        Object[] params = this.getParams(sqlBuilder, tableName, null, this.getSchema());
 
         // 查询COLUMN_TYPE
-        List<ColumnInfo> queryResponse = this.getJdbcTemplate().queryForList2(
+        List<ColumnInfo> queryResponse = this.getJdbcTemplate().queryForList(
                 sqlBuilder.toString(), ColumnInfo.class, params);
 
         columnInfoList.forEach(columnInfo -> queryResponse.forEach(row -> {
             if (columnInfo.getColumnName().equals(row.getColumnName())) {
                 columnInfo.setColumnType(row.getColumnType());
-                columnInfo.setExtra(row.getExtra());
+                // 自动增长的信息: columnInfo.isAutoincrement
+                if (!this.getDatabaseDialect().getIdentityColumnString().equalsIgnoreCase(row.getExtra())) {
+                    columnInfo.setExtra(row.getExtra());
+                }
                 columnInfo.setCharsetName(row.getCharsetName());
                 columnInfo.setCollationName(row.getCollationName());
                 columnInfo.setColumnDef(row.getColumnDef());
+
+                MysqlType mysqlType = MysqlType.getByName(row.getColumnType());
+                switch (mysqlType) {
+                    case TINYINT:
+                        columnInfo.setSourceDataType(columnInfo.getDataType());
+                        columnInfo.setDataType(JdbcDataType.TINYINT);
+                        break;
+                    case BIT:
+                        columnInfo.setSourceDataType(columnInfo.getDataType());
+                        columnInfo.setDataType(JdbcDataType.BIT);
+                        break;
+                    case ENUM:
+                        columnInfo.setSourceDataType(columnInfo.getDataType());
+                        columnInfo.setDataType(JdbcDataType.ENUM);
+                        break;
+                    case SET:
+                        columnInfo.setSourceDataType(columnInfo.getDataType());
+                        columnInfo.setDataType(JdbcDataType.SET);
+                        break;
+                    case JSON:
+                        columnInfo.setSourceDataType(columnInfo.getDataType());
+                        columnInfo.setDataType(JdbcDataType.JSON);
+                        break;
+                    case YEAR:
+                        columnInfo.setSourceDataType(columnInfo.getDataType());
+                        columnInfo.setDataType(JdbcDataType.YEAR);
+                        break;
+                    case DATETIME:
+                        columnInfo.setSourceDataType(columnInfo.getDataType());
+                        columnInfo.setDataType(JdbcDataType.DATETIME);
+                        break;
+                }
+                if (mysqlType.isAllowed(MysqlType.FIELD_FLAG_UNSIGNED)) {
+                    // 是否为无符号
+                    columnInfo.setUnsigned(true);
+                }
             }
         }));
 
@@ -197,17 +239,17 @@ public class MySQLDatabaseDao extends BasicDatabaseDao {
 
 
     @Override
-    public List<IndexInfo2> getIndexInfo(String schema, String tableName) {
+    public List<IndexInfo2> getIndexInfo(String tableName) {
 
-        List<IndexInfo2> indexInfoList = super.getIndexInfo(schema, tableName);
+        List<IndexInfo2> indexInfoList = super.getIndexInfo(tableName);
 
-        List<IndexInfo2> queryResponse = this.getJdbcTemplate().queryForList2(
-                Statement.QUERY_INDEX_EXTEND.getStatement(), IndexInfo2.class, this.getCatalog(), tableName);
+        List<IndexInfo2> queryResponse = this.getJdbcTemplate().queryForList(
+                Statement.QUERY_INDEX_EXTEND.getStatement(), IndexInfo2.class, this.getSchema(), tableName);
 
         indexInfoList.forEach(indexInfo -> queryResponse.forEach(row -> {
             if (indexInfo.getColumnName().equals(row.getColumnName())
                     && indexInfo.getIndexName().equals(row.getIndexName())) {
-                indexInfo.setIndexTypeDesc(row.getIndexTypeDesc());
+                indexInfo.setType(row.getType());
             }
         }));
 
@@ -230,9 +272,9 @@ public class MySQLDatabaseDao extends BasicDatabaseDao {
         StringBuilder sqlBuilder = new StringBuilder(
                 (tableName.length > 0 ? Statement.QUERY_CHECK_CONSTRAINT : Statement.QUERY_ALL_CHECK_CONSTRAINT).getStatement());
 
-        Object[] params = this.getParams(sqlBuilder, tableName, null, this.getCatalog());
+        Object[] params = this.getParams(sqlBuilder, tableName, null, this.getSchema());
 
-        final List<ConstraintInfo> resultList = this.getJdbcTemplate().queryForList2(sqlBuilder.toString(), ConstraintInfo.class, params);
+        final List<ConstraintInfo> resultList = this.getJdbcTemplate().queryForList(sqlBuilder.toString(), ConstraintInfo.class, params);
 
         resultList.forEach(constraintInfo -> constraintInfo.setCheckCondition(String.format("(%s)", constraintInfo.getCheckCondition())));
 
@@ -240,42 +282,28 @@ public class MySQLDatabaseDao extends BasicDatabaseDao {
     }
 
     @Override
-    public void dropTable(String tableName) {
-        // 查询外部是否有引用的约束
-        List<ExportedKey> exportedKeys =
-                this.getExportedKeys(this.getCatalog(), tableName.substring(1, tableName.length() - 1));
-
-        // 删除表的约束
-        for (ExportedKey exportedKey : exportedKeys) {
-            getLogger().info("Table {} exists foreign key, ALTER TABLE `{}` DROP CONSTRAINT {}", tableName, exportedKey.getFkTableName(), exportedKey.getFkName());
-            this.getJdbcTemplate().execute("ALTER TABLE `" + exportedKey.getFkTableName() + "` DROP CONSTRAINT `" + exportedKey.getFkName() + "`");
-        }
-
-        super.dropTable(tableName);
-    }
-
-    @Override
-    public List<ImportedKey> getImportedKeys(String schema, String tableName) {
+    public List<ImportedKey> getImportedKeys(String tableName) {
         // 存在外键的表，当多次删除表的时候，会查询到2条一样的数据。
 
-        List<ImportedKey> importedKeys = super.getImportedKeys(schema, tableName);
+        List<ImportedKey> importedKeys = super.getImportedKeys(tableName);
         List<ImportedKey> finalList = new ArrayList<>();
 
         // 去重
         boolean flag;
-        for(ImportedKey importedKey: importedKeys){
+        for (ImportedKey importedKey : importedKeys) {
             flag = false;
-            for(ImportedKey importedKey2: finalList){
-                if(importedKey2.getFkName().equals(importedKey.getFkName())){
+            for (ImportedKey importedKey2 : finalList) {
+                if (importedKey2.getFkName().equals(importedKey.getFkName())) {
                     flag = true;
                     break;
                 }
             }
-            if(!flag){
+            if (!flag) {
                 finalList.add(importedKey);
             }
         }
 
         return finalList;
     }
+
 }

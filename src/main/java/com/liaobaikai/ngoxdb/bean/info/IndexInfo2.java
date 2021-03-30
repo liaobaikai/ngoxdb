@@ -15,9 +15,54 @@ import java.sql.DatabaseMetaData;
 public class IndexInfo2 extends IndexInfo {
 
     /**
-     * 索引类型，每个数据库的自己的描述
+     * 统计信息
      */
-    private String indexTypeDesc;
+    public static final short tableIndexStatistic = DatabaseMetaData.tableIndexStatistic;
+
+    /**
+     * 聚集索引
+     */
+    public static final short tableIndexClustered = DatabaseMetaData.tableIndexClustered;
+
+    /**
+     * hash索引
+     */
+    public static final short tableIndexHashed = DatabaseMetaData.tableIndexHashed;
+
+    /**
+     * 其他索引
+     */
+    public static final short tableIndexOther = DatabaseMetaData.tableIndexOther;
+
+    /**
+     * 全文索引
+     */
+    public static final short tableIndexFullText = 10;
+
+    /**
+     * 空间索引
+     */
+    public static final short tableIndexSpatial = 11;
+
+    /**
+     * 位图索引
+     */
+    public static final short tableIndexBitmap = 12;
+
+    /**
+     * 分区索引
+     */
+    public static final short tableIndexPartitioned = 13;
+
+    /**
+     * 函数索引
+     */
+    public static final short tableIndexFunction = 14;
+
+    /**
+     * 域索引
+     */
+    public static final short tableIndexDomain = 15;
 
     /**
      * 是否为统计信息
@@ -25,7 +70,7 @@ public class IndexInfo2 extends IndexInfo {
      * @return boolean
      */
     public boolean isTableIndexStatistic() {
-        return this.getType() == DatabaseMetaData.tableIndexStatistic;
+        return this.getType() == tableIndexStatistic;
     }
 
     /**

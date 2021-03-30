@@ -2,6 +2,8 @@ package com.liaobaikai.ngoxdb.utils;
 
 import java.sql.Types;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author baikai.liao
@@ -74,6 +76,34 @@ public final class CommonUtils {
                 return true;
         }
         return false;
+    }
+
+    /**
+     * 获取map中的第一个值
+     *
+     * @param map
+     * @return
+     */
+    public static Object getFirstValue(Map<String, Object> map) {
+        for (Map.Entry<String, Object> en : map.entrySet()) {
+            return en.getValue();
+        }
+        return null;
+    }
+
+    public static TreeMap<String, Long> mapOfConvert(Map<String, AtomicLong> map) {
+
+        TreeMap<String, Long> result = new TreeMap<>();
+
+        if (map == null) {
+            return null;
+        }
+
+        for (Map.Entry<String, AtomicLong> en : map.entrySet()) {
+            result.put(en.getKey(), en.getValue().get());
+        }
+
+        return result;
     }
 
 }

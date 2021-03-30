@@ -1,4 +1,5 @@
-ngoxdb:
+#spring:
+#  datasource:
     # 规则：
     # 1.可以一主多从，主：master，从 slave [{}, {}, {} ]
     # 2.可以一主一从，主：master，从 slave
@@ -17,65 +18,91 @@ ngoxdb:
 ##      servers: tcp://192.168.3.101:1521,192.168.3.104:1521
 #      servers: baikai.top:11521
 ##      port: 1521
-#      database-name: orcl
-#      username: ngoxdb
+#      database-name: baika
+#      username: c##baikai
 #      password: oracle
 ##      params:
 #      table-replace: true
 #      protocol: tcp
 #      lower-case-name: true
-    slave:
-#      - {
-#          database: mariadb,
-#          host: 127.0.0.1,
-#          port: 3306,
-#          database-name: sakila2,
-#          username: root,
-#          password: 123456,
-#          replace-table: true,
-#          truncate-table: true,
-#          primary-key-with-autoincrement-columns: true,
-#          generate-name: true
-#        }
+
+#    master:
+#      database: dm
+#      #      host: 192.168.3.101
+#      #      servers: tcp://192.168.3.101:1521,192.168.3.104:1521
+#      servers: baikai.top:15236
+#      #      port: 1521
+#      database-name: DMSERVER
+#      username: baikai
+#      password: baikai#1234
+#      #      params:
+#      table-replace: true
+#      lower-case-name: true
+slave:
+  - {
+      database: mariadb,
+      host: 127.0.0.1,
+      port: 3306,
+      database-name: sakila2,
+      username: root,
+      password: 123456,
+      replace-table: true,
+      truncate-table: true,
+      generate-name: true
+    }
 #      - {
 #        database: oracle,
-#        servers: baikai.top:11521,
-#        database-name: orcl,
-#        username: sakila,
-#        password: sakila,
+#        servers: 171.220.244.229:11521,
+#        database-name: baika,
+#        username: baikai,
+#        password: baikai#1234,
 #        replace-table: true,
 #        truncate-table: false,
 #        create-table-params: ,
 #        params: ,
-#        primary-key-with-autoincrement-columns: true,
+#        lower-case-name: false,
+#        generate-name: true,
+#      }
+#      - {
+#        database: dm,
+#        host: 182.61.55.239,
+#        port: 5236,
+#        database-name: sakila,
+##        database-name: baikago,
+##        username: db940,
+##        password: oracle1234,
+#        username: baikai,
+#        password: baikai#1234,
+#        replace-table: true,
+#        truncate-table: false,
+#        create-table-params: ,
+#        params: ,
 #        lower-case-name: false,
 #        generate-name: true,
 #        db-console-log: false
 #      }
-      - {
-          database: msaccess,
-          local-file: /Users/fei00/Desktop/db940.mdb,
-          # V2000, V2003, V2007, V2010
-          new-database-version: V2007,
-          replace-table: true,
-          db-console-log: false,
-          truncate-table: true,
-          generate-name: true,
-      }
-#      - {
-#          database: sqlserver,
-#          host: baikai.top,
-#          port: 14330,
-#          database-name: sakila,
-#          username: sa,
-#          password: 'x+y-1=0?x&y',
-#          replace-table: true,
-#          truncate-table: false,
-#          create-table-params: ,
-#          primary-key-with-autoincrement-columns: true,
-#          generate-name: true,
+#    - {
+#        database: msaccess,
+#        local-file: /Users/fei00/Desktop/sakila.mdb,
+#        # V2000, V2003, V2007, V2010
+#        new-database-version: V2007,
+##        replace-table: true,
+##        truncate-table: true,
+##        generate-name: true,
+#    }
+#  - {
+#      database: sqlserver,
+#      host: baikai.top,
+#      port: 14330,
+#      database-name: sakila,
+#      username: sa,
+#      password: 'x+y-1=0?x&y',
+#      replace-table: true,
+#      truncate-table: false,
+#      create-table-params: ,
+#      generate-name: true,
 ##          lower-case-name: true
-#        }
+#    }
 #      - {
 #          database: postgresql,
 #          host: 127.0.0.1,
@@ -86,8 +113,8 @@ ngoxdb:
 #          replace-table: true,
 #          truncate-table: false,
 #          create-table-params: ,
-#          primary-key-with-autoincrement-columns: true,
 #          generate-name: true,
+#          remap-table: actor:actor2, film:film2
 #      }
 
 #    slave:
@@ -105,16 +132,13 @@ ngoxdb:
 #  main:
 #    allow-bean-definition-overriding: true
 
-#    master:
-#      database: mariadb
-#      host: 127.0.0.1
-#      port: 3306
-#      database-name: sakila
-#      username: root
-#      password: 123456
-#      replace-table: true
-#      truncate-table: false
-#      params:
+#master:
+#  database: mariadb
+#  host: 127.0.0.1
+#  port: 3306
+#  database-name: sakila
+#  username: root
+#  password: 123456
 #    master:
 #      database: postgresql
 #      host: 127.0.0.1
@@ -125,11 +149,15 @@ ngoxdb:
 #      replace-table: true
 #      truncate-table: false
 #      params:
-    master:
-      database: msaccess
-      local-file: /Users/fei00/Desktop/g-cgb6a3z3k~jytv8v48(2)(1).mdb
-#      /Users/fei00/Downloads/g-cgb6a3z3k~jytv8v48(1)(2).mdb
+#    master:
+#      database: msaccess
+#      local-file: /Users/fei00/Desktop/g-cgb6a3z3k~jytv8v48(2)(1).mdb
+#      tables: news
+master:
+  database: msaccess
+  local-file: /tmp/sakila.mdb
+#  tables: film_category
 
-logging:
-  level:
-    com.liaobaikai.ngoxdb.jdbctemplate.SimpleJdbcTemplate: info
+#logging:
+#  level:
+#    com.liaobaikai.ngoxdb.jdbctemplate.SimpleJdbcTemplate: info

@@ -1,16 +1,18 @@
 package com.liaobaikai.ngoxdb.core.dao.impl;
 
+import com.liaobaikai.ngoxdb.bean.NgoxDbMaster;
 import com.liaobaikai.ngoxdb.bean.info.ColumnInfo;
 import com.liaobaikai.ngoxdb.bean.info.ConstraintInfo;
 import com.liaobaikai.ngoxdb.bean.info.DatabaseInfo;
-import com.liaobaikai.ngoxdb.boot.JdbcTemplate2;
 import com.liaobaikai.ngoxdb.core.dao.BasicDatabaseDao;
 import com.liaobaikai.ngoxdb.utils.StringUtils;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Pg database数据访问
@@ -28,11 +30,11 @@ public class PgDatabaseDao extends BasicDatabaseDao {
         QUERY_SUPPORT_CHARSET("select unique value from v$nls_valid_values where parameter = ?"),
 
         // 查询数据库字符集信息
-        QUERY_DATABASE_CHARSET("select " +
-                "datname table_cat, " +
-                "null as table_schem, " +
-                "pg_encoding_to_char(encoding) as charset_name " +
-                "from pg_database where datname = ?"),
+        // QUERY_DATABASE_CHARSET("select " +
+        //         "datname table_cat, " +
+        //         "null as table_schem, " +
+        //         "pg_encoding_to_char(encoding) as charset_name " +
+        //         "from pg_database where datname = ?"),
 
         // QUERY_ALL_TABLE("SELECT " +
         //         "NULL TABLE_CAT, " +
@@ -123,23 +125,23 @@ public class PgDatabaseDao extends BasicDatabaseDao {
 
     private final DatabaseInfo databaseInfo;
 
-    public PgDatabaseDao(JdbcTemplate2 jdbcTemplate) {
-        super(jdbcTemplate);
+    public PgDatabaseDao(NgoxDbMaster ngoxDbMaster) {
+        super(ngoxDbMaster);
         this.databaseInfo = this.initDatabaseInfo();
     }
 
     @Override
     protected DatabaseInfo initDatabaseInfo() {
         // https://www.postgresql.org/docs/13/datatype-character.html
-        String databaseName = this.getJdbcTemplate().getDatabaseConfig().getDatabaseName();
-        DatabaseInfo databaseInfo = this.getJdbcTemplate().queryForList2(
-                Statement.QUERY_DATABASE_CHARSET.statement, DatabaseInfo.class, databaseName).get(0);
+        // String databaseName = ((DruidDataSource) this.getJdbcTemplate().getDataSource()).getDefaultCatalog();
+        // DatabaseInfo databaseInfo = this.getJdbcTemplate().queryForList(
+        //         Statement.QUERY_DATABASE_CHARSET.statement, DatabaseInfo.class, databaseName).get(0);
 
         // The storage requirement for a short string (up to 126 bytes) is 1 byte plus the actual string, which includes the space padding in the case of character.
         // Longer strings have 4 bytes of overhead instead of 1.
-        databaseInfo.setMaxLen(4);
+        // databaseInfo.setMaxLen(4);
 
-        return databaseInfo;
+        return null;
     }
 
     @Override
@@ -148,22 +150,26 @@ public class PgDatabaseDao extends BasicDatabaseDao {
     }
 
     @Override
+    public String getSchema() {
+        return "public";
+    }
+
+    @Override
     public DatabaseInfo getDatabaseInfo() {
         return this.databaseInfo;
     }
-
 
     @Override
     public List<ColumnInfo> getColumns(String... tableName) {
         List<ColumnInfo> columns = super.getColumns(tableName);
         columns.forEach(columnInfo -> {
-            if(columnInfo.getColumnDef() != null){
+            if (columnInfo.getColumnDef() != null) {
                 // NULL::character varying
                 for (String dataType : dataTypes) {
                     columnInfo.setColumnDef(columnInfo.getColumnDef().replaceAll(String.format("::%s[\\[\\]]?", dataType), ""));
                 }
 
-                if("NULL".equals(columnInfo.getColumnDef())){
+                if ("NULL".equals(columnInfo.getColumnDef())) {
                     columnInfo.setColumnDef(null);
                 }
             }
@@ -184,7 +190,7 @@ public class PgDatabaseDao extends BasicDatabaseDao {
 
         Object[] params = this.getParams(sqlBuilder, tableName, null, null);
 
-        final List<ConstraintInfo> resultList = this.getJdbcTemplate().queryForList2(sqlBuilder.toString(), ConstraintInfo.class, params);
+        final List<ConstraintInfo> resultList = this.getJdbcTemplate().queryForList(sqlBuilder.toString(), ConstraintInfo.class, params);
 
         resultList.forEach(ci -> {
             ci.setSourceCheckCondition(ci.getCheckCondition());
@@ -196,6 +202,7 @@ public class PgDatabaseDao extends BasicDatabaseDao {
 
     /**
      * 脱去检查约束中的 CHECK ()
+     *
      * @param checkDefinition 检查约束定义
      * @return 约束定义
      */
@@ -223,18 +230,13 @@ public class PgDatabaseDao extends BasicDatabaseDao {
      * pgsql 默认用小写存储。
      * 查询语句：like '<TABLE_NAME>'
      * {@link org.postgresql.jdbc.PgDatabaseMetaData getTables}
-     * @param schema 模式
+     *
      * @param tableName 表名
      * @return 表的数量
      */
     @Override
-    public int getTableCount(String schema, String tableName) {
-        return super.getTableCount(schema, tableName.toLowerCase());
+    public int getTableCount(String tableName) {
+        return super.getTableCount(tableName.toLowerCase());
     }
 
-    @Override
-    public void dropTable(String tableName) {
-        //
-        this.getJdbcTemplate().execute("DROP TABLE " + tableName + " CASCADE");
-    }
 }

@@ -1,13 +1,16 @@
 package com.liaobaikai.ngoxdb.core.dao;
 
+import com.liaobaikai.ngoxdb.bean.NgoxDbMaster;
 import com.liaobaikai.ngoxdb.bean.info.*;
 import com.liaobaikai.ngoxdb.bean.rs.*;
-import com.liaobaikai.ngoxdb.boot.JdbcTemplate2;
-import com.liaobaikai.ngoxdb.core.entity.SlaveMetaDataEntity;
+import com.liaobaikai.ngoxdb.boot.JdbcTemplate;
+import com.liaobaikai.ngoxdb.core.dialect.DatabaseDialect;
+import com.liaobaikai.ngoxdb.core.entity.NgoxDbRelayLog;
 import org.slf4j.Logger;
 
 import java.sql.Types;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author baikai.liao
@@ -72,53 +75,47 @@ public interface DatabaseDao {
 
     Logger getLogger();
 
+    // /**
+    //  * 获取数据库名称
+    //  *
+    //  * @return String
+    //  */
+    // String getCatalog();
+
     /**
-     * 获取数据库名称
+     * 获取模式
      *
      * @return String
      */
-    String getCatalog();
+    String getSchema();
+
+    NgoxDbMaster getNgoxDbMaster();
 
     /**
      * 获取数据库的信息
      *
-     * @return DatabaseInfo
+     * @return {@link DatabaseInfo}
      */
     DatabaseInfo getDatabaseInfo();
 
     /**
-     * 检索此数据库允许列名称的最大字符数。
+     * 获取数据库方言
+     *
+     * @return {@link DatabaseDialect}
+     */
+    DatabaseDialect getDatabaseDialect();
+
+    /**
+     * 检索此数据库允许名称的最大字符数。
+     *
      * @return 列名允许的最大字符数; 零的结果意味着没有限制或限制是不知道的
      */
-    int getMaxColumnNameLength();
-
-    /**
-     * 检索数据库在SQL语句中允许的最大字符数。
-     * @return SQL语句允许的最大字符数; 零的结果意味着没有限制或限制是不知道的
-     */
-    int getMaxStatementLength();
-
-    /**
-     * 检索方法 getMaxRowSize的返回值是否包含SQL数据类型 LONGVARCHAR 和 LONGVARBINARY 。
-     * @return true如果是的话; false否则
-     */
-    boolean doesMaxRowSizeIncludeBlobs();
-
-    /**
-     * 默认的模式通配符
-     *
-     * @return 默认为 %
-     */
-    default String getSchemaPattern() {
-        return "%";
-    }
+    int getMaxIdentifierLength();
 
     /**
      * 获取JdbcTemplate2对象
-     *
-     * @return JdbcTemplate2
      */
-    JdbcTemplate2 getJdbcTemplate();
+    JdbcTemplate getJdbcTemplate();
 
     /**
      * 创建视图的定义
@@ -149,38 +146,34 @@ public interface DatabaseDao {
     /**
      * 获取表的主键信息
      *
-     * @param schema    模式
      * @param tableName 表名
      * @return 主键信息
      */
-    List<PrimaryKey> getPrimaryKeys(String schema, String tableName);
+    List<PrimaryKey> getPrimaryKeys(String tableName);
 
     /**
      * 获取表的外键信息
      *
-     * @param schema    模式
      * @param tableName 表名
      * @return 外键信息
      */
-    List<ImportedKey> getImportedKeys(String schema, String tableName);
+    List<ImportedKey> getImportedKeys(String tableName);
 
     /**
      * 获取表的外键引用信息，那个表引用了tableName表
      *
-     * @param schema    模式
      * @param tableName 表名
      * @return 外键引用信息
      */
-    List<ExportedKey> getExportedKeys(String schema, String tableName);
+    List<ExportedKey> getExportedKeys(String tableName);
 
     /**
      * Retrieves a description of a table's columns that are automatically updated when any value in a row is updated. They are unordered.
      *
-     * @param schema    模式
      * @param tableName 表名
      * @return List<VersionColumn>
      */
-    List<VersionColumn> getVersionColumns(String schema, String tableName);
+    List<VersionColumn> getVersionColumns(String tableName);
 
     /**
      * 用户定义类型（UDT）的给定类型的给定属性的描述。
@@ -193,11 +186,10 @@ public interface DatabaseDao {
     /**
      * 获取表的索引信息
      *
-     * @param schema    模式
      * @param tableName 表名
      * @return 索引信息
      */
-    List<IndexInfo2> getIndexInfo(String schema, String tableName);
+    List<IndexInfo2> getIndexInfo(String tableName);
 
     /**
      * 主键默认就是索引，因此需要删除主键的索引信息。在创建表的同时不需要再次创建一个唯一的索引。
@@ -207,11 +199,12 @@ public interface DatabaseDao {
     /**
      * 查询表的个数
      *
-     * @param schema    模式
      * @param tableName 表名
      * @return 数量
      */
-    int getTableCount(String schema, String tableName);
+    int getTableCount(String tableName);
+
+    boolean existsTable(String tableName);
 
     /**
      * 获取约束信息
@@ -227,7 +220,7 @@ public interface DatabaseDao {
      * @param tableName 表名
      * @return 行数
      */
-    long getTableRowCount(String schema, String tableName);
+    long getTableRowCount(String tableName);
 
     /**
      * 删除表
@@ -235,6 +228,13 @@ public interface DatabaseDao {
      * @param tableName 表名
      */
     void dropTable(String tableName);
+
+    /**
+     * 删除表的外键
+     *
+     * @param tableName 表名
+     */
+    void dropForeignKey(String tableName);
 
     /**
      * 删除表数据
@@ -251,44 +251,95 @@ public interface DatabaseDao {
     void truncateTable(String tableName);
 
     /**
-     * 创建元数据表
+     * 创建日志表
+     */
+    void createLogTable();
+
+    /**
+     * 更新日志表
+     *
+     * @param entity 内容
+     */
+    void updateLogRows(NgoxDbRelayLog entity);
+
+    /**
+     * 插入日志表
+     *
+     * @param entity 内容
+     */
+    void insertLogRows(NgoxDbRelayLog entity);
+
+    /**
+     * 删除日志表
+     */
+    void dropLogTable();
+
+    /**
+     * 从报告表删除指定表的所有数据
      *
      * @param tableName 表名
      */
-    void createMetadataTable(String tableName);
+    void deleteLogRows(String tableName);
 
     /**
-     * 更新元数据表
-     *
-     * @param entity 内容
-     * @return 1：成功，0：失败
-     */
-    int updateMetadata(SlaveMetaDataEntity entity);
-
-    /**
-     * 插入元数据表
-     *
-     * @param entity 内容
-     * @return 1：成功，0：失败
-     */
-    int insertMetadata(SlaveMetaDataEntity entity);
-
-    /**
-     * 从元数据表删除指定表的所有数据
-     *
-     * @param tableName 表名
-     * @return 1：成功，0：失败
-     */
-    int deleteMetadata(String tableName);
-
-    /**
-     * 从元数据表查询指定表的所有数据
+     * 从报告表查询指定表的所有数据
      *
      * @param isUsed     是否被使用
      * @param tableNames 所有表
      * @return 元数据信息
      */
-    List<SlaveMetaDataEntity> getSlaveMetadataList(Integer isUsed, String... tableNames);
+    List<NgoxDbRelayLog> getLogRows(Integer isUsed, String... tableNames);
+
+    /**
+     * 分页查询
+     *
+     * @param tableName         表名
+     * @param queryColumnNames  查询的列名
+     * @param orderColumnNames  排序的列名
+     * @param isPrimaryKeyOrder 是否主键排序
+     * @param offset            偏移量
+     * @param limit             每页大小
+     * @return 每行的数据
+     */
+    List<Object[]> pagination(final String tableName,
+                              final String[] queryColumnNames,
+                              final String[] orderColumnNames,
+                              final boolean isPrimaryKeyOrder,
+                              final int offset,
+                              final int limit);
+
+    /**
+     * 执行查询语句
+     *
+     * @param sql         sql
+     * @param paramValues 参数值
+     * @return 每行的数据
+     */
+    List<Object[]> query(String sql, Object[] paramValues);
+
+    /**
+     * 执行查询语句
+     *
+     * @param sql       查询语句
+     * @param condition 查询条件
+     * @return 每行的数据
+     */
+    List<Object[]> query(String sql, Map<String, Object[]> condition);
+
+    /**
+     * 执行语句
+     *
+     * @param stmt 执行语句
+     */
+    void execute(String stmt);
+
+    /**
+     * 批量执行
+     *
+     * @param stmt
+     * @param batchArgs
+     */
+    void batchUpdate(String stmt, List<Object[]> batchArgs);
 
     // /**
     //  * 获取表的基本信息

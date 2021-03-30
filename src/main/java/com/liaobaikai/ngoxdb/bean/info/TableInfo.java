@@ -1,5 +1,6 @@
 package com.liaobaikai.ngoxdb.bean.info;
 
+import com.liaobaikai.ngoxdb.bean.rs.ExportedKey;
 import com.liaobaikai.ngoxdb.bean.rs.ImportedKey;
 import com.liaobaikai.ngoxdb.bean.rs.PrimaryKey;
 import com.liaobaikai.ngoxdb.bean.rs.Table;
@@ -7,7 +8,9 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 表的其他信息，通过查询数据库扩展
@@ -67,7 +70,7 @@ public class TableInfo extends Table {
     /**
      * 其他表引用本表的键（外键）
      */
-    // private List<ExportedKey> exportedKeys;
+    private List<ExportedKey> exportedKeys;
 
     /**
      * 约束的信息
@@ -75,13 +78,18 @@ public class TableInfo extends Table {
     private List<ConstraintInfo> constraintInfo;
 
     /**
-     * 所有的indexName
-     */
-    private List<String> indexNames;
-
-    /**
      * 唯一约束、主键约束
      */
     private List<String> uniqueKeys = new ArrayList<>();
+
+    /**
+     * 预处理过的插入语句
+     */
+    private Map<String, String> mapOfPreparedInsertSql = new HashMap<>();
+
+    /**
+     * 是否含有自增列
+     */
+    private boolean hasAutoIdentity;
 
 }

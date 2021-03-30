@@ -1,38 +1,25 @@
 package com.liaobaikai.ngoxdb.core.dao.impl;
 
-import com.alibaba.fastjson.JSON;
+import com.liaobaikai.ngoxdb.bean.NgoxDbMaster;
 import com.liaobaikai.ngoxdb.bean.info.ColumnInfo;
 import com.liaobaikai.ngoxdb.bean.info.ConstraintInfo;
 import com.liaobaikai.ngoxdb.bean.info.DatabaseInfo;
 import com.liaobaikai.ngoxdb.bean.info.IndexInfo2;
-import com.liaobaikai.ngoxdb.bean.rs.ExportedKey;
-import com.liaobaikai.ngoxdb.bean.rs.ImportedKey;
-import com.liaobaikai.ngoxdb.boot.JdbcTemplate2;
+import com.liaobaikai.ngoxdb.core.constant.JdbcDataType;
 import com.liaobaikai.ngoxdb.core.dao.BasicDatabaseDao;
-import com.liaobaikai.ngoxdb.core.udf.AccessDatabaseFunctions;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import net.ucanaccess.jdbc.UcanaccessConnection;
-import oracle.jdbc.OracleConnection;
 import org.slf4j.Logger;
-import org.springframework.jdbc.core.ConnectionCallback;
-import org.springframework.jdbc.datasource.DataSourceUtils;
-import org.springframework.jdbc.support.JdbcUtils;
 
 import java.sql.DatabaseMetaData;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 /**
  * Access数据库访问
  * http://ucanaccess.sourceforge.net/site.html
- *
- *
+ * <p>
+ * <p>
  * INFORMATION_SCHEMA: ADMINISTRABLE_ROLE_AUTHORIZATIONS
  * INFORMATION_SCHEMA: APPLICABLE_ROLES
  * INFORMATION_SCHEMA: ASSERTIONS
@@ -172,7 +159,7 @@ public class AccessDatabaseDao extends BasicDatabaseDao {
                 "CONSTRAINT_NAME, " +
                 "CHECK_CLAUSE AS CHECK_CONDITION, " +
                 "'C' as CONSTRAINT_TYPE " +
-                "FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS"),
+                "FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS WHERE CHECK_CLAUSE LIKE ?"),
         ;
 
         private final String statement;
@@ -184,24 +171,9 @@ public class AccessDatabaseDao extends BasicDatabaseDao {
 
     private final DatabaseInfo databaseInfo;
 
-    public AccessDatabaseDao(JdbcTemplate2 jdbcTemplate) {
-        super(jdbcTemplate);
+    public AccessDatabaseDao(NgoxDbMaster ngoxDbMaster) {
+        super(ngoxDbMaster);
         this.databaseInfo = initDatabaseInfo();
-        // this.addCustomFunctions();
-    }
-
-    /**
-     * 添加自定义函数
-     */
-    private void addCustomFunctions(){
-        this.getJdbcTemplate().execute((ConnectionCallback<Void>) con -> {
-            if (con.isWrapperFor(UcanaccessConnection.class)) {
-
-                UcanaccessConnection ucanaccessConnection = con.unwrap(UcanaccessConnection.class);
-                ucanaccessConnection.addFunctions(AccessDatabaseFunctions.class);
-            }
-            return null;
-        });
     }
 
     @Override
@@ -217,6 +189,11 @@ public class AccessDatabaseDao extends BasicDatabaseDao {
     @Override
     public Logger getLogger() {
         return log;
+    }
+
+    @Override
+    public String getSchema() {
+        return this.databaseInfo.getTableSchem();
     }
 
     @Override
@@ -236,37 +213,37 @@ public class AccessDatabaseDao extends BasicDatabaseDao {
         columns.forEach(column -> {
             // 更新数据类型
             switch (column.getDataType()) {
-                case Types.VARCHAR:
+                case JdbcDataType.VARCHAR:
                     // 长度大于255的话，就是nclob类型
+                    int maximumPrecision = this.getDatabaseDialect().getMaximumPrecision(column.getDataType());
+                    if (column.getColumnSize() <= maximumPrecision) {
+                        column.setSourceDataType(JdbcDataType.VARCHAR);
 
-                    if (column.getColumnSize() <= 255) {
-                        column.setSourceDataType(Types.VARCHAR);
-
-                        column.setDataType(Types.NVARCHAR);
-                        column.setSqlDataType(Types.NVARCHAR);
+                        column.setDataType(JdbcDataType.NVARCHAR);
+                        column.setSqlDataType(JdbcDataType.NVARCHAR);
                         column.setTypeName("NVARCHAR");
                     } else {
-                        column.setSourceDataType(Types.CLOB);
+                        column.setSourceDataType(JdbcDataType.CLOB);
 
-                        column.setDataType(Types.NCLOB);
-                        column.setSqlDataType(Types.NCLOB);
+                        column.setDataType(JdbcDataType.NCLOB);
+                        column.setSqlDataType(JdbcDataType.NCLOB);
                         column.setTypeName("NCLOB");
                     }
                     break;
-                case Types.CHAR:
+                case JdbcDataType.CHAR:
                     // char 改成 nchar
-                    column.setSourceDataType(Types.CHAR);
+                    column.setSourceDataType(JdbcDataType.CHAR);
 
-                    column.setDataType(Types.NCHAR);
-                    column.setSqlDataType(Types.NCHAR);
+                    column.setDataType(JdbcDataType.NCHAR);
+                    column.setSqlDataType(JdbcDataType.NCHAR);
                     column.setTypeName("NCHAR");
                     break;
-                case Types.CLOB:
+                case JdbcDataType.CLOB:
                     // clob 改成 nclob
-                    column.setSourceDataType(Types.CLOB);
+                    column.setSourceDataType(JdbcDataType.CLOB);
 
-                    column.setDataType(Types.NCLOB);
-                    column.setSqlDataType(Types.NCLOB);
+                    column.setDataType(JdbcDataType.NCLOB);
+                    column.setSqlDataType(JdbcDataType.NCLOB);
                     column.setTypeName("NCLOB");
                     break;
             }
@@ -287,18 +264,20 @@ public class AccessDatabaseDao extends BasicDatabaseDao {
         indexInfoList.removeIf(ii -> ii.getType() != DatabaseMetaData.tableIndexStatistic && ii.getIndexName().toUpperCase().startsWith("SYS_IDX_SYS_PK"));
     }
 
-    @Override
-    public List<ConstraintInfo> getConstraintInfo(String... tableName) {
-        List<ConstraintInfo> list = this.getJdbcTemplate().queryForList2(Statement.QUERY_ALL_CHECK_CONSTRAINT.getStatement(), ConstraintInfo.class);
+    /**
+     * 获取检查约束
+     *
+     * @param tableName 表名：schemaName.tableName
+     * @return 检查约束列表
+     */
+    private List<ConstraintInfo> getCheckConstraintInfo(String tableName) {
+
+        List<ConstraintInfo> list =
+                this.getJdbcTemplate().queryForList(Statement.QUERY_ALL_CHECK_CONSTRAINT.getStatement(),
+                        ConstraintInfo.class, tableName);
+
         list.removeIf(item -> {
             String[] splitValues = item.getCheckCondition().split("\\.");
-            if (tableName.length > 0) {
-                for (String tName : tableName) {
-                    if (!tName.equals(splitValues[1])) {
-                        return true;
-                    }
-                }
-            }
 
             // 排除非空的检查约束
             if (splitValues[2].endsWith("IS NOT NULL")) {
@@ -313,30 +292,21 @@ public class AccessDatabaseDao extends BasicDatabaseDao {
         return list;
     }
 
-    /**
-     * 创建表
-     *
-     * @param tableName 表名
-     */
     @Override
-    public void createMetadataTable(String tableName) {
-        final String sqlBuilder = "CREATE TABLE " + tableName + "( " +
-                "metadata_id    varchar(" + UUID.randomUUID().toString().length() + ") unique," +
-                "table_name     varchar(128)," +
-                "type           varchar(32)," +
-                "statement      varchar(250)," +
-                "is_used        int" +
-                ")";
+    public List<ConstraintInfo> getConstraintInfo(String... tableNames) {
 
-        this.getJdbcTemplate().execute(sqlBuilder);
-    }
+        // PUBLIC.COUNTRY.
+        List<ConstraintInfo> finalList = new ArrayList<>();
 
-    @Override
-    public void truncateTable(String tableName) {
-        // Truncate command is not exists!!
-        // Using delete command replaced.
-        // After delete, using file space is not recovery.
-        // this.deleteTable(tableName);
+        if (tableNames.length > 0) {
+            for (String tableName : tableNames) {
+                finalList.addAll(this.getCheckConstraintInfo(String.format("%s.%s%%", this.getSchema(), tableName.toUpperCase())));
+            }
+        } else {
+            finalList.addAll(this.getCheckConstraintInfo(String.format("%s.%%", this.getSchema())));
+        }
+
+        return finalList;
     }
 
     // @Override
@@ -357,10 +327,10 @@ public class AccessDatabaseDao extends BasicDatabaseDao {
 
     @Override
     public void deleteTable(String tableName) {
-        try{
+        try {
             super.deleteTable(tableName);
-        }catch (Exception e){
-            if(e.getMessage().contains("integrity constraint violation: foreign key no action")){
+        } catch (Exception e) {
+            if (e.getMessage().contains("integrity constraint violation: foreign key no action")) {
                 // 忽略
             } else {
                 this.getLogger().error("", e);
