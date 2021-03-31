@@ -3,8 +3,8 @@
 
 1) ngoxdb命令支持多个数据库之间转换(支持Access、Oracle、SqlServer、PostgreSQL、DM、MariaDB、MySQL、SQLITE等)<br/>
 
-2) 支持转换类型：表(Table)<br/>
-   暂不支持类型：视图(View)，存储过程(Procedure)，函数(Function)，自定义类型(Type)。<br/>
+2) 支持转换类型：普通表(Table)<br/>
+   暂不支持类型：分区表(Partition Table)，视图(View)，存储过程(Procedure)，函数(Function)，自定义类型(Type)。<br/>
 
 3) 如ngoxdb命令执行失败，可直接使用java命令执行，命令如下：<br/>
    cd <unzip_dir> <br/>
