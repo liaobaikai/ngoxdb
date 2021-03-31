@@ -1,5 +1,6 @@
 package com.liaobaikai.ngoxdb;
 
+import com.alibaba.fastjson.JSONObject;
 import com.liaobaikai.ngoxdb.anno.Description;
 import com.liaobaikai.ngoxdb.bean.ComparisonResult;
 import com.liaobaikai.ngoxdb.bean.info.ColumnInfo;
@@ -29,6 +30,7 @@ import java.util.*;
 public class BootApplication {
 
     public static void main(String[] args) {
+
         if (!parseArguments(args)) {
             return;
         }
@@ -109,7 +111,7 @@ public class BootApplication {
                 }
                 StringBuilder stringBuilder = new StringBuilder();
                 stringBuilder.append(String.format("%-32s %s", "--slave." + annotation.name(), annotation.label()));
-                stringBuilder.append(String.format("\n%-32s Alias: --slave.0.%s", "", annotation.name()));
+                stringBuilder.append(String.format("\n%-32s 别名: --slave.0.%s", "", annotation.name()));
 
                 printUsage(annotation, stringBuilder);
             }

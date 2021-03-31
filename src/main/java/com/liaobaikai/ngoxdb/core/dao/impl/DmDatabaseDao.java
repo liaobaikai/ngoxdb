@@ -136,8 +136,6 @@ public class DmDatabaseDao extends BasicDatabaseDao {
 
     @Override
     protected DatabaseInfo initDatabaseInfo() {
-
-
         return null;
     }
 
@@ -148,7 +146,7 @@ public class DmDatabaseDao extends BasicDatabaseDao {
 
     @Override
     public String getSchema() {
-        return this.getDatabaseInfo().getTableSchem();
+        return this.getNgoxDbMaster().getDatabaseConfig().getUsername().toUpperCase();
     }
 
     @Override

@@ -27,7 +27,7 @@ public class PgDatabaseDao extends BasicDatabaseDao {
     enum Statement {
 
         // 查询数据库支持的字符集
-        QUERY_SUPPORT_CHARSET("select unique value from v$nls_valid_values where parameter = ?"),
+        // QUERY_SUPPORT_CHARSET("select unique value from v$nls_valid_values where parameter = ?"),
 
         // 查询数据库字符集信息
         // QUERY_DATABASE_CHARSET("select " +
@@ -226,17 +226,17 @@ public class PgDatabaseDao extends BasicDatabaseDao {
         return checkDefinition;
     }
 
-    /**
-     * pgsql 默认用小写存储。
-     * 查询语句：like '<TABLE_NAME>'
-     * {@link org.postgresql.jdbc.PgDatabaseMetaData getTables}
-     *
-     * @param tableName 表名
-     * @return 表的数量
-     */
-    @Override
-    public int getTableCount(String tableName) {
-        return super.getTableCount(tableName.toLowerCase());
-    }
+    // /**
+    //  * pgsql 默认用小写存储。
+    //  * 查询语句：like '<TABLE_NAME>'
+    //  * {@link org.postgresql.jdbc.PgDatabaseMetaData getTables}
+    //  *
+    //  * @param tableName 表名
+    //  * @return 表的数量
+    //  */
+    // @Override
+    // public int getTableCount(String tableName) {
+    //     return super.getTableCount(tableName.toLowerCase());
+    // }
 
 }
