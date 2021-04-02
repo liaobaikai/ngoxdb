@@ -82,7 +82,9 @@ public abstract class BasicDatabaseConverter extends DataWorker implements Datab
         this.applyFailLogs = new ArrayList<>();
 
         this.mapOfTableImport = new HashMap<>();
-        this.parallelMaster = new ParallelMaster();
+        this.parallelMaster = new ParallelMaster(
+                ngoxDbMaster.getDatabaseConfig().getParallelWorkers(),
+                ngoxDbMaster.getDatabaseConfig().getThreadPoolSize());
         this.importFailCount = new AtomicInteger();
         this.applyLogFailCount = new AtomicInteger();
 

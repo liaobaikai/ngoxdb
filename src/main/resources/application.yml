@@ -156,6 +156,7 @@ slave:
 master:
   database: msaccess
   local-file: /tmp/sakila.mdb
+  parallel-workers: 1
 #  tables: film_category
 
 #logging:

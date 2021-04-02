@@ -75,7 +75,7 @@ public class BootApplication {
     /**
      * 展示帮助文档
      */
-    private static void showHelpDoc() {
+    public static void showHelpDoc() {
 
         // 获取所有的参数
         System.out.println("主库参数:");

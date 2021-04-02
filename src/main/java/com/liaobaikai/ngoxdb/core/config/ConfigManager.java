@@ -2,6 +2,7 @@ package com.liaobaikai.ngoxdb.core.config;
 
 import com.alibaba.druid.pool.DruidDataSource;
 import com.alibaba.fastjson.JSONObject;
+import com.liaobaikai.ngoxdb.BootApplication;
 import com.liaobaikai.ngoxdb.bean.NgoxDbMaster;
 import com.liaobaikai.ngoxdb.boot.JdbcTemplate;
 import com.liaobaikai.ngoxdb.core.converter.DatabaseConverter;
@@ -58,24 +59,39 @@ public class ConfigManager implements BeanFactoryAware {
     @Autowired
     public void setEnvironment(Environment environment) {
         Binder binder = Binder.get(environment);
+        DataSource ds;
         // master
-        mDatabaseConfig = binder.bind(MASTER_DATASOURCE_CONFIG_PREFIX, Bindable.of(DatabaseConfig.class)).get();
-        mDatabaseConfig.setName(" MASTER");
-        log.info("Master, Database vendor: {}, Username: {}, JDBC-URL: {}", mDatabaseConfig.getDatabase(), mDatabaseConfig.getUsername(), mDatabaseConfig.getUrl());
-        DataSource ds = buildDataSource(mDatabaseConfig, "master-data-source");
-        mapOfJdbcTemplate.put(mDatabaseConfig, new JdbcTemplate(ds));
+        try{
+            mDatabaseConfig = binder.bind(MASTER_DATASOURCE_CONFIG_PREFIX, Bindable.of(DatabaseConfig.class)).get();
+            mDatabaseConfig.setName(" MASTER");
+            log.info("Master, Database vendor: {}, Username: {}, JDBC-URL: {}", mDatabaseConfig.getDatabase(), mDatabaseConfig.getUsername(), mDatabaseConfig.getUrl());
+            ds = buildDataSource(mDatabaseConfig, "master-data-source");
+            mapOfJdbcTemplate.put(mDatabaseConfig, new JdbcTemplate(ds));
+        } catch (NoSuchElementException e){
+            log.error("没有收到master端的相关参数！");
+            BootApplication.showHelpDoc();
+            System.exit(-1);
+        }
 
         // 注册多个连接
 
         // slave
-        List<DatabaseConfig> databaseConfigs;
+        List<DatabaseConfig> databaseConfigs = null;
         DatabaseConfig databaseConfig;
         try {
             databaseConfigs = binder.bind(SLAVE_DATASOURCE_CONFIG_PREFIX, Bindable.listOf(DatabaseConfig.class)).get();
         } catch (NoSuchElementException e) {
-            databaseConfigs = new ArrayList<>();
-            databaseConfig = binder.bind(SLAVE_DATASOURCE_CONFIG_PREFIX, Bindable.of(DatabaseConfig.class)).get();
-            databaseConfigs.add(databaseConfig);
+            // 接收的是数组
+            try{
+                databaseConfigs = new ArrayList<>();
+                databaseConfig = binder.bind(SLAVE_DATASOURCE_CONFIG_PREFIX, Bindable.of(DatabaseConfig.class)).get();
+                databaseConfigs.add(databaseConfig);
+            } catch (NoSuchElementException e2){
+                // 没有数据
+                log.error("没有收到slave端的相关参数！");
+                BootApplication.showHelpDoc();
+                System.exit(-1);
+            }
         }
 
         for (int i = 0; i < databaseConfigs.size(); i++) {

@@ -15,26 +15,18 @@ public class ParallelMaster {
     private final ThreadPoolExecutor threadPoolExecutor;
 
     /**
-     * 缓存的线程数
-     */
-    public static final int THREAD_CACHE_SIZE = Runtime.getRuntime().availableProcessors() * 2;
-    /**
-     * 最大线程数
-     */
-    public static final int THREAD_POOL_SIZE = THREAD_CACHE_SIZE * 2;
-    /**
      * 队列数
      */
     private static final int BACK_LOG = 80;
 
-    public ParallelMaster() {
+    public ParallelMaster(int parallelWorkers, int threadPoolSize) {
 
-        log.info("THREAD_CACHE_SIZE: {}", THREAD_CACHE_SIZE);
-        log.info("THREAD_POOL_SIZE: {}", THREAD_POOL_SIZE);
+        log.info("parallelWorkers: {}", parallelWorkers);
+        log.info("threadPoolSize: {}", threadPoolSize);
 
         this.threadPoolExecutor = new ThreadPoolExecutor(
-                THREAD_CACHE_SIZE,
-                THREAD_POOL_SIZE,
+                parallelWorkers,
+                threadPoolSize,
                 0L,     // 超过THREAD_CACHE_SIZE的线程马上被终止
                 TimeUnit.MILLISECONDS,
                 new LinkedBlockingQueue<>(BACK_LOG),

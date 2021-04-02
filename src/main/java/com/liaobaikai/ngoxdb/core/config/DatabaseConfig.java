@@ -184,6 +184,16 @@ public class DatabaseConfig {
     @Description(name = "remap-table", label = "重新映射表名，如：a:a1,b:b2")
     private String remapTable = "";
 
+    @Description(name = "parallel-workers", label = "并行工作的线程数，默认为可用的核心线程数的2倍，主库(收集表信息、导出数据)；从库(导入数据)")
+    private int parallelWorkers = Runtime.getRuntime().availableProcessors() * 2;
+
+    @Description(name = "thread-pool-size", label = "线程池大小，默认为并行工作的线程数的2倍")
+    private int threadPoolSize;
+
+    public DatabaseConfig() {
+        this.threadPoolSize = parallelWorkers * 2;
+    }
+
     /**
      * 获取驱动类名
      *
@@ -338,4 +348,11 @@ public class DatabaseConfig {
                 && StringUtils.isNotEmpty(this.password));
     }
 
+    public void setParallelWorkers(int parallelWorkers) {
+        int defaultParallelWorkers = this.parallelWorkers;
+        this.parallelWorkers = parallelWorkers;
+        if(defaultParallelWorkers * 2 == this.threadPoolSize || this.threadPoolSize == 0){
+            this.threadPoolSize = parallelWorkers * 2;
+        }
+    }
 }
