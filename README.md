@@ -8,4 +8,4 @@
 
 3) 如ngoxdb命令执行失败，可直接使用java命令执行，命令如下：<br/>
    cd <unzip_dir> <br/>
-   java -Dloader.path=./libs -Xms512m -Xmx1024m -jar ./libs/ngoxdb_<version>.jar [master-parameters] [slave-parameters]
+   java -Dloader.path=./libs -Xms512m -Xmx1024m -jar ./libs/ngoxdb_<ngoxdb_version>.jar [master-parameters] [slave-parameters]
