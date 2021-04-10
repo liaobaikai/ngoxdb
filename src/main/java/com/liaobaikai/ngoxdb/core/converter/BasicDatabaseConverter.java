@@ -69,6 +69,11 @@ public abstract class BasicDatabaseConverter extends DataWorker implements Datab
      */
     private Map<String, String> remapTable;
 
+    /**
+     * 重新映射表的列名
+     */
+    private Map<String, String> remapColumn;
+
     public BasicDatabaseConverter() {
         // 默认实现
     }
@@ -104,6 +109,17 @@ public abstract class BasicDatabaseConverter extends DataWorker implements Datab
                 remapTable.put(values[0].trim(), values[1].trim());
             }
         }
+
+        this.remapColumn = new HashMap<>();
+        String remapColumnString = ngoxDbMaster.getDatabaseConfig().getRemapColumn();
+        if (remapColumnString.length() > 0) {
+            String[] remapColumnStrings = remapColumnString.split("\\s*,\\s*");
+            for (String perRemapColumnString : remapColumnStrings) {
+                String[] values = perRemapColumnString.split(":", 2);
+                remapColumn.put(values[0].trim(), values[1].trim());
+            }
+        }
+
     }
 
     /**
@@ -259,6 +275,11 @@ public abstract class BasicDatabaseConverter extends DataWorker implements Datab
     @Override
     public Map<String, String> getRemapTable() {
         return remapTable;
+    }
+
+    @Override
+    public Map<String, String> getRemapColumn() {
+        return this.remapColumn;
     }
 
     @Override

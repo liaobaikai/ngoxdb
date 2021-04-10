@@ -43,6 +43,8 @@ public abstract class TableCreator extends TableCollector {
 
     public abstract Map<String, String> getRemapTable();
 
+    public abstract Map<String, String> getRemapColumn();
+
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // build
     ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,6 +52,11 @@ public abstract class TableCreator extends TableCollector {
     protected String getFinalTableName(String name) {
         String remap = this.getRemapTable().get(name);
         return remap == null ? name : remap;
+    }
+
+    protected String getFinalColumnName(String finalTableName, String name){
+        String remap = this.getRemapColumn().get(String.format("%s.%s", finalTableName, name));
+        return remap == null ? name : remap.substring(finalTableName.length() + 1);
     }
 
     /**
@@ -60,19 +67,25 @@ public abstract class TableCreator extends TableCollector {
     public String buildCreateTable(TableInfo ti) {
 
         StringBuilder sBuilder = new StringBuilder("create table ");
-        sBuilder.append(this.toLookupName(getFinalTableName(ti.getTableName()))).append(" (");
+
+        String finalTableName = getFinalTableName(ti.getTableName());
+
+        sBuilder.append(this.toLookupName(finalTableName)).append(" (");
 
         // 列信息
         ti.getColumns().forEach(columnInfo -> {
 
             // 列名
-            sBuilder.append(this.toLookupName(columnInfo.getColumnName())).append(" ");
+            String finalColumnName = getFinalColumnName(finalTableName, columnInfo.getColumnName());
+
+            sBuilder.append(this.toLookupName(finalColumnName)).append(" ");
 
             // 支持自动标识符替换列类型
             // 相同数据库无需再次解析
             ColumnType columnType = columnInfo.getMapOfColumnType().get(this.getDatabaseConfig().getDatabase());
             if (columnType == null) {
                 columnType = getDatabaseDialect().getColumnType(columnInfo);
+                columnType.setColumnName(finalColumnName);
                 columnInfo.getMapOfColumnType().put(this.getDatabaseConfig().getDatabase(), columnType);
             }
 
@@ -127,7 +140,7 @@ public abstract class TableCreator extends TableCollector {
                 sBuilder.append(
                         getDatabaseDialect().getColumnCommentString(
                                 getFinalTableName(ti.getTableName()),
-                                columnInfo.getColumnName(),
+                                finalColumnName,
                                 columnInfo.getRemarks()
                         ));
             }
@@ -187,9 +200,12 @@ public abstract class TableCreator extends TableCollector {
         }
 
         sqlBuilder.append(" primary key (");
+
+        String finalTableName = this.getFinalTableName(ti.getTableName());
+
         // 再次排序
         ti.getPrimaryKeys().sort(Comparator.comparing(PrimaryKey::getKeySeq));
-        ti.getPrimaryKeys().forEach(pk -> sqlBuilder.append(this.toLookupName(pk.getColumnName())).append(","));
+        ti.getPrimaryKeys().forEach(pk -> sqlBuilder.append(this.toLookupName(getFinalColumnName(finalTableName, pk.getColumnName()))).append(","));
         sqlBuilder.delete(sqlBuilder.length() - 1, sqlBuilder.length()).append("),");
     }
 

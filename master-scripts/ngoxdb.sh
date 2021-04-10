@@ -1,23 +1,21 @@
 #!/bin/bash
 
+BASE_DIR=`dirname "$0"`/..
 ngoxdb_version=
-ngoxdb_libs=./libs/
+ngoxdb_lib=$BASE_DIR/lib/
 ngoxdb_jar=
+ngoxdb_config=$BASE_DIR/config/ngoxdb.yml
 
 if [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
-        cat man/usage.txt
+        cat $BASE_DIR/README.txt
 fi
 
-#arguments=""
-#for arg in "$@";
-#do
-#        if [[ $arg =~ ^--slave* ]]; then
-#                arg=$(echo $arg | sed 's/^--slave-/--slave./')
-#        else
-#                arg=$(echo $arg | sed 's/^--/--master./')
-#        fi
-#        arguments=" $arguments $arg "
-#done
-
-java -Dloader.path=$ngoxdb_libs -Xms512m -Xmx1024m -jar $ngoxdb_libs/$ngoxdb_jar $@
+java \
+-Dloader.path=$ngoxdb_lib \
+-Xms512m \
+-Xmx1024m \
+-jar $ngoxdb_lib/$ngoxdb_jar \
+--spring.config.location=$ngoxdb_config \
+--spring.profiles.active=prod \
+"$@"
 

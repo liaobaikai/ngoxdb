@@ -17,7 +17,7 @@ public enum DatabaseVendorEnum {
     POSTGRESQL("postgresql", "org.postgresql.Driver", 5432),
     ORACLE("oracle", "oracle.jdbc.OracleDriver", 1521),
     DB2("db2", "com.ibm.db2.jcc.DB2Driver", 5000),
-    DM("dm", "dm.jdbc.driver.DmDriver", 5236),  // from: windows版本: dmdbms/drivers/jdbc/usage.txt
+    DM("dm", "dm.jdbc.driver.DmDriver", 5236),  // from: windows版本: dmdbms/drivers/jdbc/USAGE.txt
     MICROSOFT_ACCESS("msaccess", "net.ucanaccess.jdbc.UcanaccessDriver", -1),
     SQLITE("sqlite", "org.sqlite.JDBC", -1),
 

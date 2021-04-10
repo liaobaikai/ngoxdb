@@ -451,9 +451,11 @@ public interface DatabaseDialect {
      * 构建插入语句
      *
      * @param ti 表信息
-     * @return sql
+     * @param finalTableName 表名
+     * @param remapColumn 映射表列名
+     * @return insert into T (col1, col2, col3, ...) values (?, ?, ?, ...)
      */
-    String buildInsertPreparedSql(TableInfo ti, String finalTableName);
+    String buildInsertPreparedSql(TableInfo ti, String finalTableName, Map<String, String> remapColumn);
 
     /**
      * 构建查询语句

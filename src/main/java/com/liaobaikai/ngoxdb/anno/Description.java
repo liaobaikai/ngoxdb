@@ -21,4 +21,7 @@ public @interface Description {
 
     DatabaseVendorEnum[] applyOn() default {};
 
+    boolean masterParam() default false;
+    boolean slaveParam() default false;
+
 }

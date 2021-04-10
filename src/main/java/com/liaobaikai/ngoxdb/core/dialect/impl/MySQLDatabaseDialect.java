@@ -12,6 +12,8 @@ import com.liaobaikai.ngoxdb.core.func.impl.StandardSQLFunction;
 import com.mysql.cj.MysqlType;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
+
 /**
  * MySQL数据库方言
  *
@@ -54,10 +56,10 @@ public class MySQLDatabaseDialect extends BasicDatabaseDialect {
         this.registerColumnType(JdbcDataType.DATETIMEOFFSET, "datetime");
         this.registerColumnType(JdbcDataType.SMALLDATETIME, "datetime");
 
-        this.registerColumnType(JdbcDataType.ENUM, "ENUM");
-        this.registerColumnType(JdbcDataType.SET, "SET");
-        this.registerColumnType(JdbcDataType.JSON, "JSON");
-        this.registerColumnType(JdbcDataType.YEAR, "YEAR");
+        this.registerColumnType(JdbcDataType.ENUM, "enum");
+        this.registerColumnType(JdbcDataType.SET, "set");
+        this.registerColumnType(JdbcDataType.JSON, "json");
+        this.registerColumnType(JdbcDataType.YEAR, "year");
 
         // 注册函数
         // 数学函数
@@ -871,8 +873,10 @@ public class MySQLDatabaseDialect extends BasicDatabaseDialect {
     }
 
     @Override
-    protected void handleBuildInsertPreparedSql(final ColumnInfo c, final StringBuilder sqlBuilder, final StringBuilder sqlPlaceHolderBuilder) {
-        sqlBuilder.append(this.toLookupName(c.getColumnName())).append(",");
+    protected void handleBuildInsertPreparedSql(final ColumnInfo c, String finalColumnName, final StringBuilder sqlBuilder, final StringBuilder sqlPlaceHolderBuilder) {
+
+
+        sqlBuilder.append(this.toLookupName(finalColumnName)).append(",");
 
         if (JdbcDataType.YEAR == c.getDataType()) {
             // 年份

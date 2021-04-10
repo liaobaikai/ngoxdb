@@ -259,7 +259,7 @@ public abstract class DataWorker extends TableCreator {
         StringBuilder sqlBuilder = new StringBuilder();
         String sql = ti.getMapOfPreparedInsertSql().get(key);
         if (sql == null) {
-            sqlBuilder.append(this.getDatabaseDialect().buildInsertPreparedSql(ti, finalTableName));
+            sqlBuilder.append(this.getDatabaseDialect().buildInsertPreparedSql(ti, finalTableName, getRemapColumn()));
             ti.getMapOfPreparedInsertSql().put(key, sqlBuilder.toString());
         } else {
             sqlBuilder.append(sql);

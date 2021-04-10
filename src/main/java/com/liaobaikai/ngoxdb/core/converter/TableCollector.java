@@ -48,6 +48,7 @@ public abstract class TableCollector {
         this.getParallelMaster().parallelExecute(tables.size(), ((index) -> buildTableInfo(tables.get(index))));
 
         // 外键的类型要一致。
+        // 保持候选键和外键的类型要一致（和外部表一样）
         for(TableInfo ti: tables){
 
             List<ImportedKey> importedKeys = ti.getImportedKeys();

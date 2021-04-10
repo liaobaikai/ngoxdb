@@ -83,13 +83,7 @@ public class BootApplication {
         for (Field field : fields) {
             Description annotation = field.getAnnotation(Description.class);
             if (annotation != null) {
-                if ("name".equalsIgnoreCase(annotation.name())
-                        || "replace-table".equalsIgnoreCase(annotation.name())
-                        || "truncate-table".equalsIgnoreCase(annotation.name())
-                        || "generate-name".equalsIgnoreCase(annotation.name())
-                        || "master-remap-table".equalsIgnoreCase(annotation.name())
-                        || "create-table-params".equalsIgnoreCase(annotation.name())
-                        || "remap-table".equalsIgnoreCase(annotation.name())) {
+                if (!annotation.masterParam()) {
                     continue;
                 }
                 StringBuilder stringBuilder = new StringBuilder();
@@ -104,9 +98,7 @@ public class BootApplication {
         for (Field field : slaveFields) {
             Description annotation = field.getAnnotation(Description.class);
             if (annotation != null) {
-                if ("page-size".equalsIgnoreCase(annotation.name())
-                        || "name".equalsIgnoreCase(annotation.name())
-                        || "tables".equalsIgnoreCase(annotation.name())) {
+                if (!annotation.slaveParam()) {
                     continue;
                 }
                 StringBuilder stringBuilder = new StringBuilder();
@@ -124,9 +116,7 @@ public class BootApplication {
         for (Field field : slaveArrFields) {
             Description annotation = field.getAnnotation(Description.class);
             if (annotation != null) {
-                if ("page-size".equalsIgnoreCase(annotation.name())
-                        || "name".equalsIgnoreCase(annotation.name())
-                        || "tables".equalsIgnoreCase(annotation.name())) {
+                if (!annotation.slaveParam()) {
                     continue;
                 }
                 StringBuilder stringBuilder = new StringBuilder();

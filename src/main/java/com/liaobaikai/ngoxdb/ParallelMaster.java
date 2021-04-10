@@ -14,22 +14,22 @@ public class ParallelMaster {
 
     private final ThreadPoolExecutor threadPoolExecutor;
 
-    /**
-     * 队列数
-     */
-    private static final int BACK_LOG = 80;
+    public ParallelMaster(int parallelWorkers, int threadPoolMaxThreads) {
+        this(parallelWorkers, threadPoolMaxThreads, Integer.MAX_VALUE);
+    }
 
-    public ParallelMaster(int parallelWorkers, int threadPoolSize) {
+    public ParallelMaster(int parallelWorkers, int threadPoolMaxThreads, int threadConcurrency) {
 
         log.info("parallelWorkers: {}", parallelWorkers);
-        log.info("threadPoolSize: {}", threadPoolSize);
+        log.info("threadPoolMaxThreads: {}", threadPoolMaxThreads);
+        log.info("threadConcurrency: {}", threadConcurrency);
 
         this.threadPoolExecutor = new ThreadPoolExecutor(
                 parallelWorkers,
-                threadPoolSize,
+                threadPoolMaxThreads,
                 0L,     // 超过THREAD_CACHE_SIZE的线程马上被终止
                 TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(BACK_LOG),
+                new LinkedBlockingQueue<>(threadConcurrency),
                 new ThreadPoolExecutor.CallerRunsPolicy());
     }
 

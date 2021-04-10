@@ -919,15 +919,23 @@ public abstract class BasicDatabaseDialect implements DatabaseDialect {
         ct.setLength(1);
     }
 
+    protected String getFinalColumnName(Map<String, String> remapColumn, String finalTableName, String name){
+        String remap = remapColumn.get(String.format("%s.%s", finalTableName, name));
+        return remap == null ? name : remap.substring(finalTableName.length() + 1);
+    }
+
     @Override
-    public String buildInsertPreparedSql(TableInfo ti, String finalTableName) {
+    public String buildInsertPreparedSql(TableInfo ti, String finalTableName, Map<String, String> remapColumn) {
+        if(remapColumn == null){
+            remapColumn = new HashMap<>();
+        }
         // 生成sql语句：
         // insert into T (col1, col2, col3, ...) values (?, ?, ?, ...)
         final StringBuilder sqlBuilder = new StringBuilder("insert into ").append(this.toLookupName(finalTableName)).append(" (");
         final StringBuilder sqlPlaceHolderBuilder = new StringBuilder();
 
         for (ColumnInfo c : ti.getColumns()) {
-            this.handleBuildInsertPreparedSql(c, sqlBuilder, sqlPlaceHolderBuilder);
+            this.handleBuildInsertPreparedSql(c, getFinalColumnName(remapColumn, finalTableName, c.getColumnName()), sqlBuilder, sqlPlaceHolderBuilder);
         }
 
         sqlBuilder.delete(sqlBuilder.length() - 1, sqlBuilder.length()).append(") values (");
@@ -937,8 +945,8 @@ public abstract class BasicDatabaseDialect implements DatabaseDialect {
         return sqlBuilder.toString();
     }
 
-    protected void handleBuildInsertPreparedSql(final ColumnInfo c, final StringBuilder sqlBuilder, final StringBuilder sqlPlaceHolderBuilder) {
-        sqlBuilder.append(this.toLookupName(c.getColumnName())).append(",");
+    protected void handleBuildInsertPreparedSql(final ColumnInfo c, String finalColumnName, final StringBuilder sqlBuilder, final StringBuilder sqlPlaceHolderBuilder) {
+        sqlBuilder.append(this.toLookupName(finalColumnName)).append(",");
         sqlPlaceHolderBuilder.append("?,");
     }
 

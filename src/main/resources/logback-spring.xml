@@ -38,7 +38,6 @@
 			<appender-ref ref="FILE" />
 			<appender-ref ref="FILE_ERROR" />
 		</root>
-
 	</springProfile>
 
 </configuration>
