@@ -12,6 +12,7 @@
 
 
 
+```
 Usage: ./ngoxdb [master-parameters] [slave-parameters]
 
 example:
@@ -219,3 +220,5 @@ example:
 --slave.0.remap-column           重新映射表的列名，如：a1.c1:a1.a1,b2.c1:b2.c2，如果存在表名映射，指定的表名应该是映射后的表名
 --slave.0.parallel-workers       并行工作的线程数，默认为可用的核心线程数的2倍，主库(收集表信息、导出数据)；从库(导入数据)
 --slave.0.thread-pool-size       线程池大小，默认为并行工作的线程数的2倍
+
+```
