@@ -1,6 +1,3 @@
-![image](https://user-images.githubusercontent.com/24989504/113009591-ab56ea80-91aa-11eb-8c40-d9e9fd603b58.png)
-
-
 
 ```
 1) ngoxdb命令支持多个数据库之间转换
@@ -11,7 +8,8 @@
 
 3) 如ngoxdb命令执行失败，可直接使用java命令执行，命令如下：
    cd <unzip_dir>
-   java -Dloader.path=./lib -Xms512m -Xmx1024m -jar ./lib/ngoxdb_<ngoxdb_version>.jar [master-parameters] [slave-parameters]
+   java -Dloader.path=./lib -Xms512m -Xmx1024m -jar ./lib/ngoxdb_<ngoxdb_version>.jar \
+   [master-parameters] [slave-parameters]
 
 
 Usage: ./ngoxdb [master-parameters] [slave-parameters]
